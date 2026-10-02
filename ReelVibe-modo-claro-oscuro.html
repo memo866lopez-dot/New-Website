@@ -1,0 +1,1900 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="ReelVibe: browser-based 9:16 video previews, captions, audio mixing and MP4 export in compatible browsers.">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#070b09">
+<title>ReelVibe — Reel Previsualizer</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #090b10;
+    --panel: #121620;
+    --border: #252c3b;
+    --text: #edf2ff;
+    --muted: #939eb6;
+    --accent: #88f7d2;
+    --purple: #ad9cff;
+  }
+
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body {
+    margin: 0;
+    background:
+      radial-gradient(ellipse at 10% 0%, #19302855, transparent 45%),
+      radial-gradient(ellipse at 90% 20%, #30235055, transparent 40%),
+      var(--bg);
+    color: var(--text);
+    font: 14px/1.5 system-ui, sans-serif;
+    min-height: 100vh;
+  }
+
+  button, input, select, textarea { font: inherit; }
+  button, input, select, textarea {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: #090d15;
+    color: var(--text);
+  }
+  button {
+    padding: 10px 14px;
+    cursor: pointer;
+    transition: border-color .2s, background .2s;
+  }
+  button:hover { border-color: var(--accent); }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  button.primary {
+    background: var(--accent);
+    color: #072019;
+    font-weight: 700;
+    border-color: var(--accent);
+  }
+  button.recording {
+    background: #ff70851c;
+    border-color: #ff7085;
+    color: #ff9bab;
+  }
+  input:not([type="range"]):not([type="checkbox"]), select, textarea {
+    width: 100%;
+    padding: 10px;
+  }
+  input[type="range"] { width: 100%; accent-color: var(--accent); }
+  input[type="checkbox"] { accent-color: var(--accent); }
+  input[type="color"] { min-height: 42px; }
+  textarea { resize: vertical; min-height: 90px; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+  label { display: block; margin-bottom: 6px; color: var(--muted); }
+  small, .muted { color: var(--muted); }
+  h1, h2, p { margin-top: 0; }
+  h1 { font-size: 23px; letter-spacing: .16em; margin-bottom: 2px; }
+  h2 { font-size: 12px; letter-spacing: .14em; text-transform: uppercase; }
+  header {
+    max-width: 1260px;
+    margin: auto;
+    padding: 28px 24px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+  }
+  .badge {
+    border: 1px solid var(--border);
+    border-radius: 30px;
+    padding: 6px 12px;
+    color: var(--accent);
+    font-size: 11px;
+    letter-spacing: .1em;
+    white-space: nowrap;
+  }
+  main {
+    max-width: 1260px;
+    margin: auto;
+    padding: 0 24px 36px;
+    display: grid;
+    grid-template-columns: minmax(300px, 1fr) minmax(320px, 460px);
+    gap: 24px;
+    align-items: start;
+  }
+  .panel {
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    background: #121620d9;
+    padding: 20px;
+  }
+  .controls { display: grid; gap: 16px; }
+  .row { display: flex; gap: 10px; align-items: center; }
+  .row > .grow { flex: 1; min-width: 0; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .field { margin-bottom: 14px; }
+  .field:last-child { margin-bottom: 0; }
+  .divider { border: 0; border-top: 1px solid var(--border); margin: 16px 0; }
+
+  .preview-panel { position: sticky; top: 20px; }
+  .preview-wrap {
+    width: min(100%, 350px);
+    margin: 0 auto;
+    position: relative;
+    aspect-ratio: 9 / 16;
+    overflow: hidden;
+    border-radius: 22px;
+    background: #000;
+    border: 1px solid #344052;
+    box-shadow: 0 24px 80px #0008;
+    container-type: inline-size;
+  }
+  video { width: 100%; height: 100%; display: block; object-fit: cover; }
+  .placeholder {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-content: center;
+    text-align: center;
+    padding: 24px;
+    pointer-events: none;
+    background: linear-gradient(160deg, #142520, #100d1c);
+  }
+  .placeholder strong {
+    font-size: 36px;
+    letter-spacing: .2em;
+    color: var(--accent);
+  }
+  .placeholder small { margin-top: 12px; }
+  .caption {
+    position: absolute;
+    left: 50%;
+    top: 75%;
+    transform: translate(-50%, -50%);
+    width: max-content;
+    max-width: 88%;
+    text-align: center;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    padding: .3em .55em;
+    border-radius: .4em;
+    color: white;
+    background: #0008;
+    text-shadow: 0 2px 8px #000c;
+    font-weight: 700;
+    line-height: 1.2;
+    pointer-events: none;
+  }
+  /* Added: captions can be dragged with a mouse, pen, or touch. */
+  .caption {
+    pointer-events: auto;
+    cursor: grab;
+    touch-action: none;
+    user-select: none;
+  }
+  .caption.dragging { cursor: grabbing; }
+  .caption:empty { display: none; }
+  .safe-guide {
+    position: absolute;
+    inset: 8% 8% 16%;
+    border: 1px dashed #ffffff38;
+    border-radius: 8px;
+    pointer-events: none;
+    display: none;
+  }
+  .preview-controls { margin-top: 18px; }
+  .time { font-variant-numeric: tabular-nums; font-size: 12px; white-space: nowrap; }
+  .hint { font-size: 12px; margin: 10px 0 0; }
+  #status {
+    max-width: 1260px;
+    margin: 0 auto;
+    padding: 0 24px 18px;
+    color: var(--accent);
+    min-height: 38px;
+  }
+  .check { display: flex; align-items: center; gap: 8px; margin: 0; }
+  .check input { margin: 0; }
+  footer { text-align: center; color: var(--muted); padding: 0 20px 24px; font-size: 12px; }
+  [hidden] { display: none !important; }
+
+  @media (max-width: 820px) {
+    main { grid-template-columns: 1fr; }
+    .preview-panel { position: static; }
+    header { align-items: flex-start; }
+  }
+  @media (max-width: 440px) {
+    main, header { padding-left: 14px; padding-right: 14px; }
+    .panel { padding: 15px; }
+    .badge { display: none; }
+    .grid2 { gap: 8px; }
+  }
+
+  /* Verde, blanco y rojo neón, distribuidos por función. */
+  :root { --accent:#39ff88; --purple:#ffffff; --border:#33433d; --text:#ffffff; --muted:#cad9d0; }
+  body { background:radial-gradient(ellipse at 8% 0%,#00ff6630,transparent 48%),radial-gradient(ellipse at 95% 55%,#ff23402b,transparent 48%),#070b09; }
+  header h1 { color:#39ff88; text-shadow:0 0 14px #39ff8880; }
+  .badge { border-color:#ffffff90; color:#fff; box-shadow:0 0 12px #ffffff20; }
+  .preview-panel { border-color:#ffffff88; box-shadow:0 0 20px #ffffff13; }
+  .controls > .panel:nth-child(1) { border-color:#39ff88aa; box-shadow:0 0 20px #39ff881c; }
+  .controls > .panel:nth-child(1) h2 { color:#39ff88; text-shadow:0 0 10px #39ff8870; }
+  .controls > .panel:nth-child(2) { border-color:#ffffffaa; box-shadow:0 0 20px #ffffff16; }
+  .controls > .panel:nth-child(2) h2 { color:#fff; text-shadow:0 0 10px #ffffff70; }
+  .controls > .panel:nth-child(3) { border-color:#ff3459aa; box-shadow:0 0 20px #ff345926; }
+  .controls > .panel:nth-child(3) h2 { color:#ff627e; text-shadow:0 0 10px #ff345970; }
+  button.primary, .neon-green { border-color:#39ff88; box-shadow:0 0 12px #39ff8830; }
+  .neon-white { border-color:#fff; color:#fff; box-shadow:0 0 12px #ffffff25; }
+  .neon-red { border-color:#ff3459; color:#ff8ba0; box-shadow:0 0 12px #ff345930; }
+  button.recording { border-color:#ff3459; color:#ff8ba0; box-shadow:0 0 16px #ff345950; }
+  button[aria-pressed="true"] { background:#39ff8825; border-color:#39ff88; color:#39ff88; }
+  .transport { flex-wrap:wrap; }
+  .transport .time { flex-basis:140px; }
+  .placeholder { background:linear-gradient(155deg,#103b23,#0b0e0c 52%,#3d101b); }
+  #status { color:#39ff88; }
+
+  /* Additive transcription/export controls; existing layout is retained. */
+  .rv-extra { margin-top:16px; border-top:1px solid var(--border); padding-top:16px; }
+  .rv-actions { display:flex; gap:8px; flex-wrap:wrap; margin:10px 0; }
+  .rv-cues { max-height:320px; overflow:auto; display:grid; gap:10px; }
+  .rv-cue { border:1px solid var(--border); border-radius:10px; padding:10px; }
+  .rv-cue textarea { min-height:62px; margin:8px 0; }
+  .rv-progress { width:100%; accent-color:var(--accent); }
+  .rv-help { font-size:12px; color:var(--muted); margin:8px 0; }
+
+
+/* Additive bilingual onboarding: original editor selectors remain unchanged. */
+.rv-intro {max-width:1260px;margin:0 auto;padding:0 24px 20px;display:grid;gap:16px;}
+.rv-intro summary {cursor:pointer;font-weight:700;font-size:17px;color:var(--accent);}
+.rv-intro h3 {font-size:14px;margin:18px 0 6px;}
+.rv-intro p {margin-bottom:10px;}
+.rv-langbar {position:relative;z-index:10002;max-width:1260px;margin:auto;padding:14px 24px 0;display:flex;justify-content:flex-end;gap:8px;align-items:center;}
+.rv-langbar label {margin:0;}.rv-langbar select {width:auto;min-width:145px;}
+@media(max-width:440px){.rv-intro {padding-left:14px;padding-right:14px;}.rv-langbar {padding-right:14px;}}
+
+
+  /* Features: uses the existing theme and interface-language dictionary. */
+  .rv-features { width:calc(100% - 48px); max-width:1212px; margin:0 auto 24px; }
+  .rv-features h2 { font-size:clamp(20px,3vw,28px); letter-spacing:.02em; text-transform:none; color:var(--accent); margin-bottom:16px; }
+  .rv-features h3 { font-size:18px; margin:22px 0 12px; }
+  .rv-feature-list { padding-left:22px; margin:0; }
+  .rv-feature-list li { margin:0 0 14px; line-height:1.65; overflow-wrap:anywhere; }
+  .rv-feature-list li::marker { color:var(--accent); }
+  .rv-feature-list strong { color:var(--text); }
+  .rv-feature-list span, .rv-features p { color:var(--muted); }
+  @media(max-width:440px) { .rv-features { width:calc(100% - 28px); } }
+
+</style>
+
+<!-- RV theme addition: original dark styles and editor code are unchanged. -->
+<script id="rvThemeInit">
+(() => {
+  'use strict';
+  let theme = 'dark';
+  try {
+    if (localStorage.getItem('rv-interface-theme') === 'light') theme = 'light';
+  } catch (_) { /* Storage can be unavailable for local/private pages. */ }
+  document.documentElement.setAttribute('data-rv-theme', theme);
+})();
+</script>
+<style id="rvThemeStyles">
+  /* Only the new button/bar layout applies in the original dark theme. */
+  .rv-langbar { flex-wrap: wrap; }
+  #rvThemeToggle { flex: 0 0 auto; white-space: nowrap; }
+  html[data-rv-theme="light"] {
+    color-scheme: light;
+    --bg: #ffffff;
+    --panel: #ffffff;
+    --border: #b8c6be;
+    --text: #000000;
+    --muted: #303b35;
+    --accent: #087a38;
+    --purple: #000000;
+  }
+  html[data-rv-theme="light"] body { background: #ffffff; color: #000000; }
+  html[data-rv-theme="light"] .panel {
+    background: #ffffff;
+    border-color: var(--border);
+    box-shadow: none;
+  }
+  html[data-rv-theme="light"] button,
+  html[data-rv-theme="light"] input,
+  html[data-rv-theme="light"] select,
+  html[data-rv-theme="light"] textarea {
+    background: #ffffff;
+    color: #000000;
+    border-color: var(--border);
+  }
+  html[data-rv-theme="light"] input::placeholder,
+  html[data-rv-theme="light"] textarea::placeholder { color: #525e57; opacity: 1; }
+  html[data-rv-theme="light"] button:hover { border-color: var(--accent); }
+  html[data-rv-theme="light"] button.primary {
+    background: #39ff88;
+    color: #000000;
+    border-color: #087a38;
+  }
+  html[data-rv-theme="light"] button[aria-pressed="true"] {
+    background: #e5f7eb;
+    border-color: #087a38;
+    color: #000000;
+  }
+  html[data-rv-theme="light"] button.recording {
+    background: #fff0f3;
+    border-color: #b91c3c;
+    color: #000000;
+    box-shadow: 0 0 12px #b91c3c20;
+  }
+  html[data-rv-theme="light"] header h1,
+  html[data-rv-theme="light"] .controls > .panel h2,
+  html[data-rv-theme="light"] .rv-features h2,
+  html[data-rv-theme="light"] .rv-intro summary,
+  html[data-rv-theme="light"] .badge,
+  html[data-rv-theme="light"] #status { color: #000000; text-shadow: none; }
+  html[data-rv-theme="light"] .badge {
+    border-color: var(--border);
+    box-shadow: none;
+  }
+  html[data-rv-theme="light"] .controls > .panel:nth-child(1) { border-color: #087a38; }
+  html[data-rv-theme="light"] .controls > .panel:nth-child(2),
+  html[data-rv-theme="light"] .preview-panel { border-color: #a1afa7; }
+  html[data-rv-theme="light"] .controls > .panel:nth-child(3) { border-color: #b91c3c; }
+  html[data-rv-theme="light"] .neon-green { border-color: #087a38; box-shadow: none; }
+  html[data-rv-theme="light"] .neon-white { border-color: #64736a; box-shadow: none; }
+  html[data-rv-theme="light"] .neon-red { border-color: #b91c3c; box-shadow: none; }
+  /* The video canvas, caption colors and preview guides are NOT themed. */
+  html[data-rv-theme="light"] .preview-wrap {
+    --accent: #39ff88;
+    --text: #ffffff;
+    --muted: #cad9d0;
+  }
+</style>
+</head>
+<body>
+<div class="rv-langbar"><button id="rvThemeToggle" type="button" aria-pressed="false" data-rv-user-content title="Switch to light mode">Light mode</button><label for="rvUiLanguage">Language</label><select id="rvUiLanguage"><option value="en">English</option><option value="es">Spanish</option></select></div>
+<div id="rvApp">
+<noscript><p class="panel">JavaScript is required to use the editor. / Necesitas JavaScript para utilizar el editor.</p></noscript>
+<header>
+  <div>
+    <h1>ReelVibe</h1>
+    <p class="muted">A minimalist Reel previsualizer</p>
+  </div>
+  <span class="badge">9:16 · LOCAL PREVIEW</span>
+</header>
+
+<section id="rvFeatures" class="rv-features panel" aria-labelledby="rvFeaturesTitle">
+<h2 id="rvFeaturesTitle">Features &amp; How It Works</h2>
+<h3>Why Choose ReelVibe?</h3>
+<ul class="rv-feature-list">
+<li><strong>Free Access:</strong> <span>Use this browser editor without an account or a payment step. Processing is limited by your device, browser and available resources.</span></li>
+<li><strong>No Account Required:</strong> <span>Open local media and start editing without creating an account. Review the privacy notice for external URLs, model downloads and microphone services.</span></li>
+<li><strong>No Watermarks:</strong> <span>Keep your content 100% clean. Your creative work belongs to you, exported without forced logos or branding.</span></li>
+<li><strong>Real-Time Safe Zone Overlay:</strong> <span>Preview 9:16 videos with an approximate safe-area guide. Instagram layouts vary by device and updates; check the final video in the target app before publishing.</span></li>
+<li><strong>Fast &amp; Client-Side Processing:</strong> <span>Local media editing runs in your browser. Automatic transcription downloads external libraries and a model; microphone dictation may use a browser online service. Performance depends on your device.</span></li>
+<li><strong>Essential Editing Tools:</strong> <span>Trim audio and video, auto-generate captions, and customize typography effortlessly through a clean, clutter-free interface.</span></li>
+</ul>
+<h3>About This Version</h3>
+<p>This version opens the editor directly. Advertising and donation integrations are not active.</p>
+<ul class="rv-feature-list">
+<li><strong>Advertising:</strong> <span>No video ads are implemented in this version; access and downloads are not gated by advertising.</span></li>
+<li><strong>Optional Donations:</strong> <span>No donation or payment link is configured in this version.</span></li>
+</ul>
+</section>
+
+<div class="rv-intro"><section class="panel"><details open><summary>How to use it</summary><h3>1. Choose your video</h3><p>Upload a local video or paste a direct HTTP/HTTPS video URL and press Load. Streaming platforms and ordinary web pages are not direct media URLs. Wait for the ready message. Local sources are recommended for transcription, audio separation and export.</p><h3>2. Play, seek, loop and trim</h3><p>Play starts playback; Pause holds the current position; Stop returns to the trim start; Restart plays again from that point. The timeline seeks within your segment. Both Loop controls toggle repetition. Enter trim start/end in seconds, mark the current position with Mark start/end, reset the full clip, or apply the trim to the preview. Trimming does not change the original file.</p><h3>3. Frame and mix audio</h3><p>Fill frame crops to 9:16; Fit entire video preserves the full image with black bars when needed. Set Original volume and Added audio volume separately. Upload audio or load a direct audio URL; trim it using its start/end fields and mark/reset buttons. Added audio starts at the video trim start and stops at its own trim end. Remove audio clears only the added track.</p><h3>4. Separate audio</h3><p>Separate and download audio works with a local video. It records the selected audio in real time, requests a download, adds the result as the extra track if the video and trim have not changed, and mutes the original to avoid duplication. Cancel separation stops the operation. This is not lossless extraction and silent videos produce silence.</p><h3>5. Dictate or edit text</h3><p>Choose the spoken language, then Transcribe microphone to dictate and Stop transcription to finish. This listens to your microphone, not the video, and may use an online browser service. Edit transcription focuses the editable box; you can type or paste text. The interface language is separate from the recognition language.</p><h3>6. Style and position captions</h3><p>Choose font, weight, size and color. Use position presets or the Horizontal/Vertical sliders. Drag the caption with a mouse, pen or touch, or focus it and use arrow keys (Shift moves farther). Toggle Text background and Safe-area guide. Guides are approximate; keep long captions inside the frame.</p><h3>7. Transcribe video and edit timed subtitles</h3><p>Automatic transcription reads the original audio of the selected video segment, not the added track or microphone. Choose the spoken language first. The initial run downloads libraries and a multilingual Whisper model; inference runs locally and may take time or use substantial memory. Review the result. Add Subtitle creates a cue; edit its text and relative start/end times, View jumps to it, and Delete removes it. Enable timed subtitles to show cues at their timestamps. Typing in the general transcription turns off timed mode without deleting cues. After changing the video or trim, check timings or transcribe again. SRT subtitles downloads timestamps relative to the trim start, not a video.</p><h3>8. Export the finished Reel</h3><p>Download MP4 records the chosen segment at 720 × 1280 with framing, visible captions and both volume-adjusted audio tracks. Recording is in real time: keep the tab visible and wait for progress to finish. Cancel process stops export or transcription; model cancellation may not be immediate. The browser must support canvas capture, Web Audio and genuine MP4 recording. External media needs CORS permission. The page never disguises WebM as MP4. A download request is not proof that your browser saved the file; check your downloads.</p><h3>9. Language and saving</h3><p>Use Language at the top to switch all built-in interface text, help, policies, accessible labels and application messages between English and Spanish. Your video, entered captions, transcripts, filenames and URLs are preserved, not automatically translated. Changing interface language does not change the spoken-language selector. There is no project autosave: export before closing or reloading.</p></details></section><section class="panel"><details id="rvPolicy"><summary>Security, privacy & responsible use</summary><h3>Your content and responsibility</h3><p>You are responsible for all media you load, create, edit, transcribe, export or publish, and for how you use the page. Obtain copyright, music, image, voice and privacy permissions, including consent when recording other people. Do not use this tool for unlawful, deceptive, abusive or rights-infringing purposes. The owners do not approve or endorse user content.</p><h3>Disclaimer and limits of liability</h3><p>The page is provided as is and as available, without guarantees of accuracy, uninterrupted operation, compatibility or fitness for a particular purpose. To the maximum extent permitted by applicable law, the owners are not responsible for user actions, user content, publication decisions or losses arising from use of this page. Users bear responsibility for their own use and outputs. This statement does not exclude liability that cannot legally be excluded, waive mandatory consumer rights, or excuse the owners from their own legal duties. Review these terms with qualified legal counsel before public deployment.</p><h3>Local processing and third parties</h3><p>This page code does not upload local media to an application server. Automatic video transcription processes audio in your browser but downloads code and models from third-party services, which receive normal network information such as IP address. Microphone recognition may send speech to your browser provider; check its privacy terms. Remote media requests contact their hosts. Hosting providers may keep access logs. Local processing is not a guarantee that every dependency, browser extension or hosting environment is private. Avoid sensitive content unless you understand these risks.</p><h3>Permissions, downloads and storage</h3><p>Allow microphone access only when needed; stop dictation and revoke permissions when finished. Load trusted files and URLs only. Keep backups of your originals and review exported audio, caption accuracy and downloads before publishing. Your interface language may be stored in browser storage when available; no media project is saved there. Browser caches may retain downloaded libraries or models. Closing the page does not delete previously downloaded files.</p><h3>Access and security</h3><p>The editor opens without CAPTCHA or authentication. Do not store secrets in this public HTML. Publish using HTTPS. If you later add protected server endpoints, enforce validation and rate limits on the server; a CAPTCHA requires server-side token verification and does not replace those controls.</p></details></section></div>
+<div id="status" role="status" aria-live="polite">Ready. Add a video to begin.</div>
+
+<main>
+  <section class="panel preview-panel" aria-label="Reel preview">
+    <div class="preview-wrap">
+      <video id="video" playsinline preload="metadata"></video>
+      <div class="placeholder" id="placeholder">
+        <strong>9:16</strong>
+        <small>Your next Reel starts here.</small>
+      </div>
+      <div class="safe-guide" id="safeGuide"></div>
+      <div class="caption" id="caption" tabindex="0" aria-label="Caption position: drag to move, or use arrow keys" title="Drag to move the text. Arrow keys also move it."></div>
+    </div>
+
+    <div class="preview-controls">
+      <div class="row transport" aria-label="Playback controls">
+        <button id="play" class="primary" type="button" disabled>▶ Play</button>
+        <button id="pause" class="neon-white" type="button" disabled>❚❚ Pause</button>
+        <button id="stop" class="neon-red" type="button" disabled>■ Stop</button>
+        <button id="restart" class="neon-white" type="button" disabled aria-label="Restart preview">↺ Restart</button>
+        <button id="toggleLoop" class="neon-green" type="button" aria-pressed="false">↻ Loop: OFF</button>
+        <span id="clock" class="time grow">0:00 / 0:00</span>
+        <label class="check"><input id="loop" type="checkbox"> Loop</label>
+      </div>
+      <div class="field" style="margin-top:14px">
+        <label for="seek">Preview timeline</label>
+        <input id="seek" type="range" min="0" max="1" step="0.01" value="0" disabled>
+      </div>
+      <div class="grid2">
+        <div>
+          <label for="videoVolume">Original volume</label>
+          <input id="videoVolume" type="range" min="0" max="1" step=".01" value=".7">
+        </div>
+        <div>
+          <label for="audioVolume">Added audio volume</label>
+          <input id="audioVolume" type="range" min="0" max="1" step=".01" value=".8">
+        </div>
+      </div>
+      <p class="hint">The original controls trim the preview; Download MP4 exports the segment with audio and text.</p>
+      <div class="rv-extra" id="rvExportPanel">
+        <h2>Download / Finished video</h2>
+        <div class="rv-actions">
+          <button id="rvDownload" class="primary" type="button">↓ Download MP4</button>
+          <button id="rvCancel" class="neon-red" type="button" hidden>Cancel process</button>
+        </div>
+        <progress id="rvProgress" class="rv-progress" max="1" value="0" hidden aria-label="Process progress"></progress>
+        <p id="rvTaskStatus" class="rv-help" role="status" aria-live="polite"></p>
+        <p class="rv-help">Exports the selected segment at 720 × 1280 with framing, both audio tracks and text. Recording runs in real time: keep this tab visible. Requires compatible MP4 recording; WebM is never renamed as MP4. External URLs require server CORS permission.</p>
+      </div>
+
+    </div>
+  </section>
+
+  <div class="controls">
+    <section class="panel">
+      <h2>01 / Video source</h2>
+      <div class="field">
+        <label for="videoFile">Upload video</label>
+        <input id="videoFile" type="file" accept="video/*">
+      </div>
+      <div class="field">
+        <label for="videoUrl">Or use a direct video URL</label>
+        <div class="row">
+          <input id="videoUrl" class="grow" type="url" placeholder="https://example.com/video.mp4">
+          <button id="loadVideo">Load</button>
+        </div>
+      </div>
+      <div class="grid2">
+        <div>
+          <label for="videoIn">Trim start · seconds</label>
+          <input id="videoIn" type="number" min="0" step=".1" value="0" disabled>
+        </div>
+        <div>
+          <label for="videoOut">Trim end · seconds</label>
+          <input id="videoOut" type="number" min="0" step=".1" value="0" disabled>
+        </div>
+      </div>
+      <div class="row" style="margin-top:14px; flex-wrap:wrap" aria-label="Video trim controls">
+        <button id="videoMarkIn" type="button" disabled>✂ Mark start</button>
+        <button id="videoMarkOut" type="button" disabled>✂ Mark end</button>
+        <button id="videoResetTrim" type="button" disabled>Reset trim</button>
+        <button id="applyVideoTrim" class="neon-green" type="button" disabled>✂ Apply trim to preview</button>
+      </div>
+      <div class="row" style="margin-top:14px;flex-wrap:wrap">
+        <button id="extractAudio" class="neon-white" type="button" disabled>♫ Separate and download audio</button>
+        <button id="cancelExtraction" class="neon-red" type="button" hidden>Cancel separation</button>
+      </div>
+      <p class="hint">Separation: upload a local video file. Only audio from the selected segment is recorded in real time and added to the audio track. This is not lossless extraction. The format depends on your browser; a video without audio produces silence.</p>
+      <div class="field" style="margin-top:14px">
+        <label for="fit">Frame fit</label>
+        <select id="fit">
+          <option value="cover">Fill frame / crop</option>
+          <option value="contain">Fit entire video</option>
+        </select>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>02 / Added audio</h2>
+      <div class="field">
+        <label for="audioFile">Upload audio</label>
+        <input id="audioFile" type="file" accept="audio/*">
+      </div>
+      <div class="field">
+        <label for="audioUrl">Or use a direct audio URL</label>
+        <div class="row">
+          <input id="audioUrl" class="grow" type="url" placeholder="https://example.com/audio.mp3">
+          <button id="loadAudio">Load</button>
+        </div>
+      </div>
+      <div class="grid2">
+        <div>
+          <label for="audioIn">Trim start · seconds</label>
+          <input id="audioIn" type="number" min="0" step=".1" value="0" disabled>
+        </div>
+        <div>
+          <label for="audioOut">Trim end · seconds</label>
+          <input id="audioOut" type="number" min="0" step=".1" value="0" disabled>
+        </div>
+      </div>
+      <div class="row" style="margin-top:14px; flex-wrap:wrap" aria-label="Audio trim controls">
+        <button id="audioMarkIn" type="button" disabled>✂ Mark start</button>
+        <button id="audioMarkOut" type="button" disabled>✂ Mark end</button>
+        <button id="audioResetTrim" type="button" disabled>Reset trim</button>
+      </div>
+      <div class="row" style="margin-top:14px">
+        <button id="removeAudio">Remove audio</button>
+        <small>The selected audio begins at the video’s trim start.</small>
+      </div>
+      <audio id="audio" preload="metadata"></audio>
+    </section>
+
+    <section class="panel">
+      <h2>03 / Voice & captions</h2>
+      <div class="row">
+        <button id="dictate" class="neon-red" type="button">● Transcribe microphone</button>
+        <button id="editTranscript" class="neon-white" type="button">✎ Edit transcription</button>
+        <select id="speechLanguage" class="grow" aria-label="Dictation language">
+          <option value="en-US">English (US)</option>
+          <option value="en-GB">English (UK)</option>
+          <option value="es-ES">Spanish</option>
+          <option value="fr-FR">French</option>
+          <option value="de-DE">German</option>
+          <option value="pt-BR">Portuguese</option>
+          <option value="hi-IN">Hindi</option>
+          <option value="ja-JP">Japanese</option>
+        </select>
+      </div>
+      <p class="hint" id="speechHint">
+        Dictate through your microphone or type below. Recognition may use your browser provider’s online service. This button transcribes the microphone, not the video file. You can paste a video transcription below and drag it in the preview.
+      </p>
+      <div class="field" style="margin-top:14px">
+        <label for="transcript">Editable transcription</label>
+        <textarea id="transcript" placeholder="Your words, your style…"></textarea>
+      </div>
+      <div class="grid2">
+        <div>
+          <label for="font">Font</label>
+          <select id="font">
+            <option value="system-ui, sans-serif">System sans</option>
+            <option value="Arial, sans-serif">Arial</option>
+            <option value="Georgia, serif">Georgia</option>
+            <option value="'Courier New', monospace">Monospace</option>
+            <option value="Impact, sans-serif">Impact</option>
+          </select>
+        </div>
+        <div>
+          <label for="fontWeight">Weight</label>
+          <select id="fontWeight">
+            <option value="400">Regular</option>
+            <option value="600">Semibold</option>
+            <option value="700" selected>Bold</option>
+            <option value="900">Heavy</option>
+          </select>
+        </div>
+        <div>
+          <label for="fontSize">Size · <span id="sizeValue">28</span> px*</label>
+          <input id="fontSize" type="range" min="12" max="64" value="28">
+        </div>
+        <div>
+          <label for="textColor">Text color</label>
+          <input id="textColor" type="color" value="#ffffff">
+        </div>
+      </div>
+
+      <hr class="divider">
+
+      <div class="field">
+        <label for="position">Position preset</label>
+        <select id="position">
+          <option value="top">Top</option>
+          <option value="center">Center</option>
+          <option value="bottom" selected>Lower third</option>
+          <option value="custom">Custom</option>
+        </select>
+      </div>
+      <div class="grid2">
+        <div>
+          <label for="captionX">Horizontal · <span id="xValue">50</span>%</label>
+          <input id="captionX" type="range" min="10" max="90" value="50">
+        </div>
+        <div>
+          <label for="captionY">Vertical · <span id="yValue">75</span>%</label>
+          <input id="captionY" type="range" min="10" max="90" value="75">
+        </div>
+      </div>
+      <div class="row" style="margin-top:14px; flex-wrap:wrap">
+        <label class="check"><input id="captionBackground" type="checkbox" checked> Text background</label>
+        <label class="check"><input id="showGuides" type="checkbox"> Safe-area guide</label>
+      </div>
+      <p class="hint">*Font size scales with the preview width. Captions remain visible throughout the selected segment. Drag text over the preview to change its position.</p>
+      <div class="rv-extra" id="rvTranscriptionPanel">
+        <h2>Automatic video transcription</h2>
+        <div class="rv-actions">
+          <button id="rvAuto" class="primary" type="button">✦ Automatic transcription</button>
+          <button id="rvAddCue" class="neon-white" type="button">+ Subtitle</button>
+          <button id="rvSrt" class="neon-white" type="button">↓ SRT subtitles</button>
+        </div>
+        <label class="check"><input id="rvTimed" type="checkbox"> Show subtitles according to their timestamps</label>
+        <p class="rv-help">Transcribes the original audio of the trimmed video, not the microphone or added track. Uses the language selected above. The first run downloads a multilingual Whisper model (this may take time and considerable memory); audio is processed in this browser. An internet connection is needed to download libraries and the model. Recommended on a recent computer using HTTPS or localhost.</p>
+        <p class="rv-help">Edit each subtitle and its start/end times below. Times are relative to the trim start. Existing font, size, color, background and position controls also apply to these results. Typing in the general transcription disables timed mode without deleting subtitles.</p>
+        <div id="rvCues" class="rv-cues" aria-label="Subtitle texts and timestamps"></div>
+      </div>
+
+    </section>
+  </div>
+</main>
+
+<footer>Local files stay in this page. Layout guides are approximate, not Instagram UI guarantees.</footer>
+
+</div>
+<script id="rvLocalization">
+(() => {
+'use strict';
+const entries = [{"en": "ReelVibe — Reel Previsualizer", "es": "ReelVibe — Previsualizador de Reels", "aliases": []}, {"en": "A minimalist Reel previsualizer", "es": "Un previsualizador minimalista de Reels", "aliases": []}, {"en": "9:16 · LOCAL PREVIEW", "es": "9:16 · VISTA PREVIA LOCAL", "aliases": []}, {"en": "Ready. Add a video to begin.", "es": "Listo. Añade un video para comenzar.", "aliases": []}, {"en": "Reel preview", "es": "Vista previa del Reel", "aliases": []}, {"en": "Your next Reel starts here.", "es": "Tu próximo Reel comienza aquí.", "aliases": []}, {"en": "Caption position: drag to move, or use arrow keys", "es": "Posición del texto: arrastra para moverlo o usa las flechas", "aliases": []}, {"en": "Drag to move the text. Arrow keys also move it.", "es": "Arrastra para mover el texto. También puedes usar las flechas.", "aliases": []}, {"en": "Playback controls", "es": "Controles de reproducción", "aliases": []}, {"en": "▶ Play", "es": "▶ Reproducir", "aliases": []}, {"en": "❚❚ Pause", "es": "❚❚ Pausa", "aliases": []}, {"en": "■ Stop", "es": "■ Detener", "aliases": ["■ Stop"]}, {"en": "Restart preview", "es": "Reiniciar vista previa", "aliases": []}, {"en": "↺ Restart", "es": "↺ Reiniciar", "aliases": []}, {"en": "↻ Loop: OFF", "es": "↻ Repetición: NO", "aliases": []}, {"en": "↻ Loop: ON", "es": "↻ Repetición: SÍ", "aliases": []}, {"en": "Loop", "es": "Repetir", "aliases": []}, {"en": "Preview timeline", "es": "Línea de tiempo de la vista previa", "aliases": []}, {"en": "Original volume", "es": "Volumen original", "aliases": []}, {"en": "Added audio volume", "es": "Volumen del audio añadido", "aliases": []}, {"en": "The original controls trim the preview; Download MP4 exports the segment with audio and text.", "es": "Los controles originales recortan la vista previa; Descargar MP4 exporta el segmento con audio y texto.", "aliases": ["Los controles originales recortan la vista previa; el nuevo botón Download MP4 exporta el segmento con audio y texto."]}, {"en": "Download / Finished video", "es": "Descarga / Video terminado", "aliases": ["Download / Video terminado"]}, {"en": "↓ Download MP4", "es": "↓ Descargar MP4", "aliases": []}, {"en": "Cancel process", "es": "Cancelar proceso", "aliases": []}, {"en": "Process progress", "es": "Progreso del proceso", "aliases": []}, {"en": "Exports the selected segment at 720 × 1280 with framing, both audio tracks and text. Recording runs in real time: keep this tab visible. Requires compatible MP4 recording; WebM is never renamed as MP4. External URLs require server CORS permission.", "es": "Exporta el segmento seleccionado en 720 × 1280, con el encuadre, las dos pistas de audio y el texto. Se graba en tiempo real: mantén esta pestaña visible. Requiere grabación MP4 compatible; no renombra WebM como MP4. Las URLs externas necesitan permiso CORS del servidor.", "aliases": []}, {"en": "01 / Video source", "es": "01 / Fuente del video", "aliases": []}, {"en": "Upload video", "es": "Subir video", "aliases": []}, {"en": "Or use a direct video URL", "es": "O usa una URL directa de video", "aliases": []}, {"en": "Load", "es": "Cargar", "aliases": []}, {"en": "Trim start · seconds", "es": "Inicio del recorte · segundos", "aliases": []}, {"en": "Trim end · seconds", "es": "Final del recorte · segundos", "aliases": []}, {"en": "Video trim controls", "es": "Controles de recorte de video", "aliases": []}, {"en": "✂ Mark start", "es": "✂ Marcar inicio", "aliases": []}, {"en": "✂ Mark end", "es": "✂ Marcar final", "aliases": []}, {"en": "Reset trim", "es": "Restablecer recorte", "aliases": []}, {"en": "✂ Apply trim to preview", "es": "✂ Aplicar recorte a la vista previa", "aliases": []}, {"en": "♫ Separate and download audio", "es": "♫ Separar y descargar audio", "aliases": []}, {"en": "Cancel separation", "es": "Cancelar separación", "aliases": []}, {"en": "Separation: upload a local video file. Only audio from the selected segment is recorded in real time and added to the audio track. This is not lossless extraction. The format depends on your browser; a video without audio produces silence.", "es": "Separación: sube un archivo de video local. Se graba solo el audio del segmento seleccionado en tiempo real y se añade a la pista de audio. No es una extracción sin pérdida. El formato depende del navegador; un video sin audio producirá silencio.", "aliases": []}, {"en": "Frame fit", "es": "Encuadre", "aliases": []}, {"en": "Fill frame / crop", "es": "Llenar encuadre / recortar", "aliases": []}, {"en": "Fit entire video", "es": "Mostrar video completo", "aliases": []}, {"en": "02 / Added audio", "es": "02 / Audio añadido", "aliases": []}, {"en": "Upload audio", "es": "Subir audio", "aliases": []}, {"en": "Or use a direct audio URL", "es": "O usa una URL directa de audio", "aliases": []}, {"en": "Audio trim controls", "es": "Controles de recorte de audio", "aliases": []}, {"en": "Remove audio", "es": "Eliminar audio", "aliases": []}, {"en": "The selected audio begins at the video’s trim start.", "es": "El audio seleccionado comienza al inicio del recorte de video.", "aliases": []}, {"en": "03 / Voice & captions", "es": "03 / Voz y subtítulos", "aliases": []}, {"en": "● Transcribe microphone", "es": "● Transcribir micrófono", "aliases": []}, {"en": "■ Stop transcription", "es": "■ Detener transcripción", "aliases": []}, {"en": "✎ Edit transcription", "es": "✎ Editar transcripción", "aliases": []}, {"en": "Dictation language", "es": "Idioma del dictado", "aliases": []}, {"en": "English (US)", "es": "Inglés (EE. UU.)", "aliases": []}, {"en": "English (UK)", "es": "Inglés (Reino Unido)", "aliases": []}, {"en": "Spanish", "es": "Español", "aliases": []}, {"en": "French", "es": "Francés", "aliases": ["Français"]}, {"en": "German", "es": "Alemán", "aliases": ["Deutsch"]}, {"en": "Portuguese", "es": "Portugués", "aliases": ["Português"]}, {"en": "Hindi", "es": "Hindi", "aliases": ["हिन्दी"]}, {"en": "Japanese", "es": "Japonés", "aliases": ["日本語"]}, {"en": "Editable transcription", "es": "Transcripción editable", "aliases": []}, {"en": "Your words, your style…", "es": "Tus palabras, tu estilo…", "aliases": []}, {"en": "Font", "es": "Fuente", "aliases": []}, {"en": "System sans", "es": "Sans del sistema", "aliases": []}, {"en": "Monospace", "es": "Monoespaciada", "aliases": []}, {"en": "Weight", "es": "Grosor", "aliases": []}, {"en": "Regular", "es": "Normal", "aliases": []}, {"en": "Semibold", "es": "Seminegrita", "aliases": []}, {"en": "Bold", "es": "Negrita", "aliases": []}, {"en": "Heavy", "es": "Muy gruesa", "aliases": []}, {"en": "Size ·", "es": "Tamaño ·", "aliases": []}, {"en": "Text color", "es": "Color del texto", "aliases": []}, {"en": "Position preset", "es": "Posición predefinida", "aliases": []}, {"en": "Top", "es": "Arriba", "aliases": []}, {"en": "Center", "es": "Centro", "aliases": []}, {"en": "Lower third", "es": "Tercio inferior", "aliases": []}, {"en": "Custom", "es": "Personalizada", "aliases": []}, {"en": "Horizontal ·", "es": "Horizontal ·", "aliases": []}, {"en": "Vertical ·", "es": "Vertical ·", "aliases": []}, {"en": "Text background", "es": "Fondo del texto", "aliases": []}, {"en": "Safe-area guide", "es": "Guía de área segura", "aliases": []}, {"en": "*Font size scales with the preview width. Captions remain visible throughout the selected segment. Drag text over the preview to change its position.", "es": "*El tamaño de fuente se adapta al ancho de la vista previa. Los subtítulos permanecen visibles durante el segmento seleccionado. Arrastra el texto sobre la vista previa para cambiar su posición.", "aliases": ["*Font size scales with the preview width. Captions remain visible throughout the selected segment. Arrastra el texto sobre la vista previa para cambiar su posición."]}, {"en": "Automatic video transcription", "es": "Transcripción automática del video", "aliases": []}, {"en": "✦ Automatic transcription", "es": "✦ Transcripción automática", "aliases": []}, {"en": "+ Subtitle", "es": "+ Subtítulo", "aliases": []}, {"en": "↓ SRT subtitles", "es": "↓ Subtítulos SRT", "aliases": []}, {"en": "Show subtitles according to their timestamps", "es": "Mostrar subtítulos según sus tiempos", "aliases": []}, {"en": "Transcribes the original audio of the trimmed video, not the microphone or added track. Uses the language selected above. The first run downloads a multilingual Whisper model (this may take time and considerable memory); audio is processed in this browser. An internet connection is needed to download libraries and the model. Recommended on a recent computer using HTTPS or localhost.", "es": "Transcribe el audio original del recorte de video, no el micrófono ni la pista añadida. Usa el idioma seleccionado arriba. La primera vez descarga un modelo Whisper multilingüe (puede tardar y consumir bastante memoria); el audio se procesa en este navegador. Necesita conexión para descargar las librerías y el modelo. Recomendado en un ordenador reciente mediante HTTPS o localhost.", "aliases": []}, {"en": "Edit each subtitle and its start/end times below. Times are relative to the trim start. Existing font, size, color, background and position controls also apply to these results. Typing in the general transcription disables timed mode without deleting subtitles.", "es": "Edita cada texto y su inicio/final aquí abajo. Los tiempos son relativos al inicio del recorte. Los controles existentes de fuente, tamaño, color, fondo y posición se aplican también a estos resultados. Si escribes en la transcripción general, se desactiva el modo temporizado sin borrar los subtítulos.", "aliases": []}, {"en": "Subtitle texts and timestamps", "es": "Textos y tiempos de los subtítulos", "aliases": []}, {"en": "Local files stay in this page. Layout guides are approximate, not Instagram UI guarantees.", "es": "Los archivos locales permanecen en esta página. Las guías son aproximadas y no garantizan la interfaz de Instagram.", "aliases": []}, {"en": "▶ View", "es": "▶ Ver", "aliases": []}, {"en": "Delete", "es": "Eliminar", "aliases": []}, {"en": "Start · seconds", "es": "Inicio · segundos", "aliases": []}, {"en": "End · seconds", "es": "Final · segundos", "aliases": []}, {"en": "New subtitle", "es": "Nuevo subtítulo", "aliases": []}, {"en": "Added audio could not play. Check its format or browser permissions.", "es": "No se pudo reproducir el audio añadido. Revisa el formato o los permisos del navegador.", "aliases": []}, {"en": "Playback failed. Try a supported video format or another direct URL.", "es": "Falló la reproducción. Prueba un formato compatible u otra URL directa.", "aliases": []}, {"en": "Video stopped at the start of the selected segment.", "es": "Video detenido al inicio del segmento seleccionado.", "aliases": []}, {"en": "Type or paste the transcription. Then drag the text in the preview.", "es": "Escribe o pega la transcripción. Después arrastra el texto en la vista previa.", "aliases": []}, {"en": "Trim applied to the preview; the original file is unchanged.", "es": "Recorte aplicado a la vista previa; el archivo original no se modifica.", "aliases": []}, {"en": "Unsupported URL", "es": "URL no compatible", "aliases": []}, {"en": "Enter a valid HTTP or HTTPS media URL.", "es": "Introduce una URL válida de medios HTTP o HTTPS.", "aliases": []}, {"en": "Use a finite-duration media file; live streams are not supported.", "es": "Usa un archivo de duración finita; las transmisiones en vivo no son compatibles.", "aliases": []}, {"en": "Trim updated.", "es": "Recorte actualizado.", "aliases": []}, {"en": "Added audio removed.", "es": "Audio añadido eliminado.", "aliases": []}, {"en": "This browser cannot separate audio using this page.", "es": "Este navegador no permite separar audio con esta página.", "aliases": []}, {"en": "Audio separated: download requested. It is added to the preview if the video has not changed; original audio is muted to avoid duplication.", "es": "Audio separado: descarga solicitada. Se añade a la vista previa si no cambiaste el video; el original se silencia para evitar duplicarlo.", "aliases": []}, {"en": "Audio separation cancelled.", "es": "Separación de audio cancelada.", "aliases": []}, {"en": "Could not separate audio. Use a compatible local video and a browser with Web Audio and MediaRecorder.", "es": "No se pudo separar el audio. Usa un video local compatible y un navegador con Web Audio y MediaRecorder.", "aliases": []}, {"en": "Speech recognition is unavailable in this browser. You can still type or paste captions.", "es": "El reconocimiento de voz no está disponible en este navegador. Puedes escribir o pegar subtítulos.", "aliases": []}, {"en": "Microphone dictation needs HTTPS or localhost. You can still type or paste captions.", "es": "El dictado necesita HTTPS o localhost. Puedes escribir o pegar subtítulos.", "aliases": []}, {"en": "Listening through your microphone…", "es": "Escuchando a través del micrófono…", "aliases": []}, {"en": "Microphone access was denied. Allow it in your browser settings.", "es": "Se denegó el acceso al micrófono. Permítelo en los ajustes del navegador.", "aliases": []}, {"en": "No microphone is available.", "es": "No hay ningún micrófono disponible.", "aliases": []}, {"en": "Speech recognition could not reach its service.", "es": "El reconocimiento de voz no pudo conectarse a su servicio.", "aliases": []}, {"en": "No speech was detected. Try starting dictation again.", "es": "No se detectó voz. Intenta iniciar el dictado otra vez.", "aliases": []}, {"en": "The selected speech language is not supported.", "es": "El idioma de voz seleccionado no es compatible.", "aliases": []}, {"en": "Dictation stopped.", "es": "Dictado detenido.", "aliases": []}, {"en": "Could not start dictation. Wait a moment and try again.", "es": "No se pudo iniciar el dictado. Espera un momento e inténtalo otra vez.", "aliases": []}, {"en": "Load a video before adding timed subtitles.", "es": "Carga un video antes de añadir subtítulos temporizados.", "aliases": []}, {"en": "There are no subtitles to download.", "es": "No hay subtítulos para descargar.", "aliases": []}, {"en": "Wait for or cancel the process already running.", "es": "Espera o cancela el proceso que ya está en marcha.", "aliases": []}, {"en": "Stop microphone transcription before continuing.", "es": "Detén la transcripción del micrófono antes de continuar.", "aliases": []}, {"en": "Process cancelled.", "es": "Proceso cancelado.", "aliases": []}, {"en": "Cancelling… Model loading or inference may take time to finish.", "es": "Cancelando… La carga o inferencia del modelo puede tardar en terminar.", "aliases": []}, {"en": "Export cancelled: keep the tab visible to avoid an incomplete video.", "es": "Exportación cancelada: mantén la pestaña visible para evitar un video incompleto.", "aliases": []}, {"en": "Could not load media. Check format, URL and CORS permissions.", "es": "No se pudo cargar el medio. Revisa formato, URL y permisos CORS.", "aliases": []}, {"en": "The segment contains no decodable audio.", "es": "El segmento no contiene audio decodificable.", "aliases": []}, {"en": "Web Audio is required for transcription.", "es": "Se necesita Web Audio para transcribir.", "aliases": []}, {"en": "The browser blocked audio. Press the button again.", "es": "El navegador bloqueó el audio. Pulsa de nuevo el botón.", "aliases": []}, {"en": "Reading video audio…", "es": "Leyendo el audio del video…", "aliases": []}, {"en": "Could not read the video. Enable CORS for external URLs or upload a local file.", "es": "No se pudo leer el video. Para URLs externas, habilita CORS o sube un archivo local.", "aliases": []}, {"en": "Reading audio in real time; this browser cannot decode the container directly…", "es": "Leyendo audio en tiempo real; este navegador no decodifica directamente el contenedor…", "aliases": []}, {"en": "Reading audio in real time…", "es": "Leyendo el audio en tiempo real…", "aliases": []}, {"en": "Audio reading stopped.", "es": "La lectura del audio se detuvo.", "aliases": []}, {"en": "No readable audio was found in the segment.", "es": "No se encontró audio legible en el segmento.", "aliases": []}, {"en": "Load a video to transcribe its audio.", "es": "Carga un video para transcribir su audio.", "aliases": []}, {"en": "Replace the current timed subtitles with a new transcription?", "es": "¿Reemplazar los subtítulos temporizados actuales por una nueva transcripción?", "aliases": []}, {"en": "The segment contains no audible audio; no subtitles were generated.", "es": "El segmento no contiene audio audible; no se generaron subtítulos.", "aliases": []}, {"en": "Downloading transcription libraries and model. The first load may take time…", "es": "Descargando librerías y modelo de transcripción. La primera carga puede tardar…", "aliases": []}, {"en": "Transcribing audio locally. Do not close this tab…", "es": "Transcribiendo el audio localmente. No cierres esta pestaña…", "aliases": []}, {"en": "No speech detected. Previous text is preserved.", "es": "No se detectó voz. El texto anterior se conserva.", "aliases": []}, {"en": "Transcription ready. Review text and timestamps: automatic recognition may make mistakes.", "es": "Transcripción lista. Revisa los textos y tiempos: el reconocimiento automático puede cometer errores.", "aliases": []}, {"en": "Transcription cancelled. Previous text is preserved.", "es": "Transcripción cancelada. El texto anterior se conserva.", "aliases": []}, {"en": "Load a video before downloading.", "es": "Carga un video antes de descargarlo.", "aliases": []}, {"en": "This browser cannot record MP4. Use a recent Chrome, Edge or Safari version with MediaRecorder MP4 support. No WebM with a fake extension will be generated.", "es": "Este navegador no permite grabar MP4. Usa una versión reciente de Chrome, Edge o Safari que admita MediaRecorder MP4. No se generará un WebM con extensión falsa.", "aliases": []}, {"en": "The browser cannot capture the video canvas.", "es": "El navegador no permite capturar el lienzo del video.", "aliases": []}, {"en": "Keep this tab visible during export.", "es": "Mantén esta pestaña visible durante la exportación.", "aliases": []}, {"en": "Web Audio is required to mix tracks.", "es": "Se necesita Web Audio para mezclar las pistas.", "aliases": []}, {"en": "The trim must have a duration greater than zero.", "es": "El recorte debe tener una duración mayor que cero.", "aliases": []}, {"en": "The browser blocked export audio.", "es": "El navegador bloqueó el audio de la exportación.", "aliases": []}, {"en": "The browser could not encode MP4.", "es": "El navegador no pudo codificar el MP4.", "aliases": []}, {"en": "Video playback failed during export.", "es": "La reproducción del video falló durante la exportación.", "aliases": []}, {"en": "Exporting MP4 in real time. Keep this tab visible…", "es": "Exportando MP4 en tiempo real. Mantén esta pestaña visible…", "aliases": []}, {"en": "Export stopped or took too long.", "es": "La exportación se detuvo o tardó demasiado.", "aliases": []}, {"en": "The browser did not produce a valid MP4.", "es": "El navegador no produjo un MP4 válido.", "aliases": []}, {"en": "Output has no MP4 header; it was not downloaded with an incorrect extension.", "es": "La salida no tiene encabezado MP4; no se descargó con una extensión incorrecta.", "aliases": []}, {"en": "MP4 ready: download requested, including trim, audio and subtitles.", "es": "MP4 terminado: descarga solicitada, con recorte, audio y subtítulos.", "aliases": []}, {"en": "Export cancelled. No incomplete video was downloaded.", "es": "Exportación cancelada. No se descargó un video incompleto.", "aliases": []}, {"en": "Dictate through your microphone or type below. Recognition may use your browser provider’s online service. This button transcribes the microphone, not the video file. You can paste a video transcription below and drag it in the preview.", "es": "Dicta con el micrófono o escribe abajo. El reconocimiento puede usar el servicio en línea del proveedor del navegador. Este botón transcribe el micrófono, no el archivo de video. Puedes pegar una transcripción abajo y arrastrarla en la vista previa.", "aliases": ["Dictate through your microphone or type below. Recognition may use your browser provider’s online service. Este botón transcribe el micrófono, no el audio del archivo de video. Puedes pegar una transcripción del video en el campo inferior y arrastrarla en la vista previa."]}, {"en": "Language", "es": "Idioma", "aliases": []}, {"en": "English", "es": "Inglés", "aliases": []}, {"en": "How to use it", "es": "Cómo usar la página", "aliases": []}, {"en": "Security, privacy & responsible use", "es": "Seguridad, privacidad y uso responsable", "aliases": []}, {"en": "1. Choose your video", "es": "1. Elige tu video", "aliases": []}, {"en": "Upload a local video or paste a direct HTTP/HTTPS video URL and press Load. Streaming platforms and ordinary web pages are not direct media URLs. Wait for the ready message. Local sources are recommended for transcription, audio separation and export.", "es": "Sube un video local o pega una URL directa HTTP/HTTPS y pulsa Cargar. Las plataformas de streaming y las páginas web normales no son URLs directas de medios. Espera el aviso de que está listo. Se recomiendan archivos locales para transcribir, separar audio y exportar.", "aliases": []}, {"en": "2. Play, seek, loop and trim", "es": "2. Reproduce, busca, repite y recorta", "aliases": []}, {"en": "Play starts playback; Pause holds the current position; Stop returns to the trim start; Restart plays again from that point. The timeline seeks within your segment. Both Loop controls toggle repetition. Enter trim start/end in seconds, mark the current position with Mark start/end, reset the full clip, or apply the trim to the preview. Trimming does not change the original file.", "es": "Reproducir inicia; Pausa mantiene la posición; Detener vuelve al inicio del recorte; Reiniciar reproduce desde allí. La línea de tiempo permite desplazarte dentro del segmento. Ambos controles Repetir activan la repetición. Introduce los tiempos en segundos, marca la posición con Marcar inicio/final, restablece el clip completo o aplica el recorte a la vista previa. El archivo original no cambia.", "aliases": []}, {"en": "3. Frame and mix audio", "es": "3. Encuadra y mezcla audio", "aliases": []}, {"en": "Fill frame crops to 9:16; Fit entire video preserves the full image with black bars when needed. Set Original volume and Added audio volume separately. Upload audio or load a direct audio URL; trim it using its start/end fields and mark/reset buttons. Added audio starts at the video trim start and stops at its own trim end. Remove audio clears only the added track.", "es": "Llenar encuadre recorta a 9:16; Mostrar video completo conserva la imagen con barras negras si hacen falta. Ajusta los volúmenes original y añadido por separado. Sube audio o carga una URL directa; recórtalo con sus campos y botones de marcar/restablecer. El audio añadido comienza al inicio del recorte de video y termina en su propio final. Eliminar audio solo elimina esa pista.", "aliases": []}, {"en": "4. Separate audio", "es": "4. Separa el audio", "aliases": []}, {"en": "Separate and download audio works with a local video. It records the selected audio in real time, requests a download, adds the result as the extra track if the video and trim have not changed, and mutes the original to avoid duplication. Cancel separation stops the operation. This is not lossless extraction and silent videos produce silence.", "es": "Separar y descargar audio funciona con videos locales. Graba el audio seleccionado en tiempo real, solicita la descarga, añade el resultado como pista adicional si el video y recorte no han cambiado y silencia el original para evitar duplicarlo. Cancelar separación detiene la operación. No es extracción sin pérdida y los videos sin audio producen silencio.", "aliases": []}, {"en": "5. Dictate or edit text", "es": "5. Dicta o edita texto", "aliases": []}, {"en": "Choose the spoken language, then Transcribe microphone to dictate and Stop transcription to finish. This listens to your microphone, not the video, and may use an online browser service. Edit transcription focuses the editable box; you can type or paste text. The interface language is separate from the recognition language.", "es": "Elige el idioma hablado, pulsa Transcribir micrófono para dictar y Detener transcripción para terminar. Escucha tu micrófono, no el video, y puede usar un servicio en línea del navegador. Editar transcripción enfoca el campo editable; puedes escribir o pegar texto. El idioma de la interfaz es independiente del idioma de reconocimiento.", "aliases": []}, {"en": "6. Style and position captions", "es": "6. Da estilo y posición al texto", "aliases": []}, {"en": "Choose font, weight, size and color. Use position presets or the Horizontal/Vertical sliders. Drag the caption with a mouse, pen or touch, or focus it and use arrow keys (Shift moves farther). Toggle Text background and Safe-area guide. Guides are approximate; keep long captions inside the frame.", "es": "Elige fuente, grosor, tamaño y color. Usa posiciones predefinidas o los controles horizontal y vertical. Arrastra el texto con ratón, lápiz o pantalla táctil, o enfócalo y usa las flechas (Mayús mueve más). Activa Fondo del texto y Guía de área segura. Las guías son aproximadas; evita que los textos largos salgan del encuadre.", "aliases": []}, {"en": "7. Transcribe video and edit timed subtitles", "es": "7. Transcribe el video y edita subtítulos temporizados", "aliases": []}, {"en": "Automatic transcription reads the original audio of the selected video segment, not the added track or microphone. Choose the spoken language first. The initial run downloads libraries and a multilingual Whisper model; inference runs locally and may take time or use substantial memory. Review the result. Add Subtitle creates a cue; edit its text and relative start/end times, View jumps to it, and Delete removes it. Enable timed subtitles to show cues at their timestamps. Typing in the general transcription turns off timed mode without deleting cues. After changing the video or trim, check timings or transcribe again. SRT subtitles downloads timestamps relative to the trim start, not a video.", "es": "La transcripción automática lee el audio original del segmento de video, no la pista añadida ni el micrófono. Elige primero el idioma hablado. La primera ejecución descarga librerías y un modelo Whisper multilingüe; la inferencia es local y puede tardar o consumir mucha memoria. Revisa los resultados. Añadir subtítulo crea una entrada; edita su texto y tiempos relativos, Ver salta a ella y Eliminar la borra. Activa los subtítulos temporizados para mostrarlos según sus tiempos. Escribir en la transcripción general desactiva ese modo sin borrar entradas. Tras cambiar el video o recorte, revisa los tiempos o transcribe otra vez. Subtítulos SRT descarga tiempos relativos al inicio del recorte, no un video.", "aliases": []}, {"en": "8. Export the finished Reel", "es": "8. Exporta el Reel terminado", "aliases": []}, {"en": "Download MP4 records the chosen segment at 720 × 1280 with framing, visible captions and both volume-adjusted audio tracks. Recording is in real time: keep the tab visible and wait for progress to finish. Cancel process stops export or transcription; model cancellation may not be immediate. The browser must support canvas capture, Web Audio and genuine MP4 recording. External media needs CORS permission. The page never disguises WebM as MP4. A download request is not proof that your browser saved the file; check your downloads.", "es": "Descargar MP4 graba el segmento a 720 × 1280 con encuadre, subtítulos visibles y ambas pistas de audio con sus volúmenes. La grabación es en tiempo real: mantén la pestaña visible y espera a que termine. Cancelar proceso detiene exportación o transcripción; cancelar el modelo puede no ser inmediato. Se necesita captura de lienzo, Web Audio y grabación MP4 real. Los medios externos requieren CORS. La página nunca disfraza WebM de MP4. Solicitar una descarga no garantiza que el navegador guarde el archivo; comprueba tus descargas.", "aliases": []}, {"en": "9. Language and saving", "es": "9. Idioma y guardado", "aliases": []}, {"en": "Use Language at the top to switch all built-in interface text, help, policies, accessible labels and application messages between English and Spanish. Your video, entered captions, transcripts, filenames and URLs are preserved, not automatically translated. Changing interface language does not change the spoken-language selector. There is no project autosave: export before closing or reloading.", "es": "Usa Idioma arriba para cambiar los textos de interfaz, ayuda, políticas, etiquetas accesibles y mensajes de la aplicación entre inglés y español. Se conservan el video, subtítulos introducidos, transcripciones, nombres de archivos y URLs; no se traducen automáticamente. El idioma de interfaz no cambia el selector de idioma hablado. No hay guardado automático del proyecto: exporta antes de cerrar o recargar.", "aliases": []}, {"en": "Your content and responsibility", "es": "Tu contenido y responsabilidad", "aliases": []}, {"en": "You are responsible for all media you load, create, edit, transcribe, export or publish, and for how you use the page. Obtain copyright, music, image, voice and privacy permissions, including consent when recording other people. Do not use this tool for unlawful, deceptive, abusive or rights-infringing purposes. The owners do not approve or endorse user content.", "es": "Eres responsable de los medios que cargas, creas, editas, transcribes, exportas o publicas, y del uso de la página. Obtén permisos de derechos de autor, música, imagen, voz y privacidad, incluido el consentimiento al grabar a otras personas. No uses la herramienta para fines ilegales, engañosos, abusivos o que vulneren derechos. Los propietarios no aprueban ni respaldan contenido de usuarios.", "aliases": []}, {"en": "Disclaimer and limits of liability", "es": "Aviso y límites de responsabilidad", "aliases": []}, {"en": "The page is provided as is and as available, without guarantees of accuracy, uninterrupted operation, compatibility or fitness for a particular purpose. To the maximum extent permitted by applicable law, the owners are not responsible for user actions, user content, publication decisions or losses arising from use of this page. Users bear responsibility for their own use and outputs. This statement does not exclude liability that cannot legally be excluded, waive mandatory consumer rights, or excuse the owners from their own legal duties. Review these terms with qualified legal counsel before public deployment.", "es": "La página se ofrece tal cual y según disponibilidad, sin garantías de exactitud, continuidad, compatibilidad ni idoneidad para un fin concreto. En la máxima medida permitida por la ley, los propietarios no son responsables de acciones, contenido o decisiones de publicación de usuarios ni de pérdidas derivadas del uso. Los usuarios asumen responsabilidad por su uso y resultados. Este aviso no excluye responsabilidades legalmente irrenunciables, derechos obligatorios del consumidor ni deberes legales propios de los propietarios. Revisa estas condiciones con asesoría jurídica antes de publicar el sitio.", "aliases": []}, {"en": "Local processing and third parties", "es": "Procesamiento local y terceros", "aliases": []}, {"en": "This page code does not upload local media to an application server. Automatic video transcription processes audio in your browser but downloads code and models from third-party services, which receive normal network information such as IP address. Microphone recognition may send speech to your browser provider; check its privacy terms. Remote media requests contact their hosts. Hosting providers may keep access logs. Local processing is not a guarantee that every dependency, browser extension or hosting environment is private. Avoid sensitive content unless you understand these risks.", "es": "El código de esta página no sube medios locales a un servidor de la aplicación. La transcripción del video procesa audio en tu navegador, pero descarga código y modelos de terceros, que reciben datos normales de red como la dirección IP. El reconocimiento del micrófono puede enviar voz al proveedor del navegador; consulta sus condiciones de privacidad. Las solicitudes de medios remotos contactan sus servidores. El alojamiento puede conservar registros de acceso. El procesamiento local no garantiza privacidad de todas las dependencias, extensiones o entornos de alojamiento. Evita contenido sensible si no entiendes estos riesgos.", "aliases": []}, {"en": "Permissions, downloads and storage", "es": "Permisos, descargas y almacenamiento", "aliases": []}, {"en": "Allow microphone access only when needed; stop dictation and revoke permissions when finished. Load trusted files and URLs only. Keep backups of your originals and review exported audio, caption accuracy and downloads before publishing. Your interface language may be stored in browser storage when available; no media project is saved there. Browser caches may retain downloaded libraries or models. Closing the page does not delete previously downloaded files.", "es": "Permite el micrófono solo cuando lo necesites; detén el dictado y revoca permisos al terminar. Carga solo archivos y URLs de confianza. Conserva copias de originales y revisa audio exportado, exactitud de subtítulos y descargas antes de publicar. El idioma de la interfaz puede guardarse en el navegador si está disponible; no se guarda el proyecto multimedia allí. Las cachés pueden conservar librerías o modelos. Cerrar la página no elimina archivos ya descargados.", "aliases": []}, {"en": "Access and security", "es": "Acceso y seguridad", "aliases": []}, {"en": "The editor opens without CAPTCHA or authentication. Do not store secrets in this public HTML. Publish using HTTPS. If you later add protected server endpoints, enforce validation and rate limits on the server; a CAPTCHA requires server-side token verification and does not replace those controls.", "es": "El editor se abre sin CAPTCHA ni autenticación. No guardes secretos en este HTML público. Publica mediante HTTPS. Si después añades servicios protegidos en un servidor, aplica validación y límites de solicitudes en el servidor; un CAPTCHA necesita verificar el token en el servidor y no sustituye estos controles.", "aliases": []}, {"en": "An unexpected browser or network error occurred. Check compatibility, connectivity and CORS; see the browser console for technical details.", "es": "Ocurrió un error inesperado del navegador o de red. Revisa compatibilidad, conexión y CORS; consulta los detalles técnicos en la consola del navegador.", "aliases": []}, {"en": "Features & How It Works", "es": "Funciones y cómo funciona", "aliases": []}, {"en": "Why Choose ReelVibe?", "es": "¿Por qué elegir ReelVibe?", "aliases": []}, {"en": "Free Access:", "es": "Acceso gratuito:", "aliases": []}, {"en": "Use this browser editor without an account or a payment step. Processing is limited by your device, browser and available resources.", "es": "Utiliza este editor web sin cuenta ni paso de pago. El procesamiento depende de tu dispositivo, navegador y recursos disponibles.", "aliases": []}, {"en": "No Account Required:", "es": "Sin necesidad de crear una cuenta:", "aliases": []}, {"en": "Open local media and start editing without creating an account. Review the privacy notice for external URLs, model downloads and microphone services.", "es": "Abre archivos locales y empieza a editar sin crear una cuenta. Revisa el aviso de privacidad sobre URLs externas, descarga de modelos y servicios de micrófono.", "aliases": []}, {"en": "No Watermarks:", "es": "Sin marcas de agua:", "aliases": []}, {"en": "Keep your content 100% clean. Your creative work belongs to you, exported without forced logos or branding.", "es": "Mantén tu contenido totalmente libre de marcas de agua. Tu trabajo creativo te pertenece y se exporta sin logotipos ni marcas impuestas.", "aliases": []}, {"en": "Real-Time Safe Zone Overlay:", "es": "Superposición de zona segura en tiempo real:", "aliases": []}, {"en": "Preview 9:16 videos with an approximate safe-area guide. Instagram layouts vary by device and updates; check the final video in the target app before publishing.", "es": "Previsualiza videos 9:16 con una guía aproximada de zona segura. La interfaz de Instagram varía según dispositivo y actualizaciones; comprueba el video final en la aplicación de destino antes de publicar.", "aliases": []}, {"en": "Fast & Client-Side Processing:", "es": "Procesamiento rápido y local en tu navegador:", "aliases": []}, {"en": "Local media editing runs in your browser. Automatic transcription downloads external libraries and a model; microphone dictation may use a browser online service. Performance depends on your device.", "es": "La edición de archivos locales se ejecuta en tu navegador. La transcripción automática descarga librerías y un modelo externos; el dictado puede usar un servicio en línea del navegador. El rendimiento depende de tu dispositivo.", "aliases": []}, {"en": "Essential Editing Tools:", "es": "Herramientas esenciales de edición:", "aliases": []}, {"en": "Trim audio and video, auto-generate captions, and customize typography effortlessly through a clean, clutter-free interface.", "es": "Recorta audio y video, genera subtítulos automáticamente y personaliza la tipografía sin esfuerzo desde una interfaz sencilla y despejada.", "aliases": []}, {"en": "About This Version", "es": "Acerca de esta versión", "aliases": []}, {"en": "This version opens the editor directly. Advertising and donation integrations are not active.", "es": "Esta versión abre el editor directamente. Las integraciones de publicidad y donaciones no están activas.", "aliases": []}, {"en": "Advertising:", "es": "Publicidad:", "aliases": []}, {"en": "No video ads are implemented in this version; access and downloads are not gated by advertising.", "es": "Esta versión no incluye anuncios de video; el acceso y las descargas no están condicionados por publicidad.", "aliases": []}, {"en": "Optional Donations:", "es": "Donaciones opcionales:", "aliases": []}, {"en": "No donation or payment link is configured in this version.", "es": "Esta versión no tiene configurado ningún enlace de donación ni de pago.", "aliases": []}, {"en": "Wait for the current process to finish before starting dictation.", "es": "Espera a que termine el proceso actual antes de iniciar el dictado.", "aliases": []}, {"en": "Stop microphone dictation before separating audio.", "es": "Detén el dictado del micrófono antes de separar audio.", "aliases": []}, {"en": "The segment ended before recording could start. Select a longer segment.", "es": "El segmento terminó antes de iniciar la grabación. Selecciona un segmento más largo.", "aliases": []}];
+const normalize = s => String(s).replace(/\s+/g,' ').trim();
+const index = new Map();
+for (const entry of entries) for (const value of [entry.en,entry.es,...entry.aliases]) index.set(normalize(value),entry);
+let lang = 'en';
+try { if (localStorage.getItem('rv-interface-language') === 'es') lang = 'es'; } catch {}
+const patterns = [
+ [/^(?:Loading|Cargando) (video|audio)…$/, m => [`Loading ${m[1]}…`,`Cargando ${m[1]}…`]],
+ [/^(Video|Audio) (?:ready|listo) · (.+)\.$/,m => [`${m[1]} ready · ${m[2]}.`,`${m[1]} listo · ${m[2]}.`]],
+ [/^(?:Unable to load|No se pudo cargar) (video|audio)\. (?:Check the codec, direct URL, server restrictions, or mixed-content blocking\.|Revisa el códec, la URL directa, las restricciones del servidor o el bloqueo de contenido mixto\.)$/,m => [`Unable to load ${m[1]}. Check the codec, direct URL, server restrictions, or mixed-content blocking.`,`No se pudo cargar ${m[1]}. Revisa el códec, la URL directa, las restricciones del servidor o el bloqueo de contenido mixto.`]],
+ [/^(?:Separando audio|Separating audio): (.+) \/ (.+)\. (?:Se procesa en tiempo real\.|Processing runs in real time\.)$/,m => [`Separating audio: ${m[1]} / ${m[2]}. Processing runs in real time.`,`Separando audio: ${m[1]} / ${m[2]}. Se procesa en tiempo real.`]],
+ [/^(?:Subtítulo|Subtitle) (\d+)$/,m => [`Subtitle ${m[1]}`,`Subtítulo ${m[1]}`]],
+ [/^(?:Texto del subtítulo|Subtitle text) (\d+)$/,m => [`Subtitle text ${m[1]}`,`Texto del subtítulo ${m[1]}`]],
+ [/^(?:Descargando modelo|Downloading model): (\d+)%$/,m => [`Downloading model: ${m[1]}%`,`Descargando modelo: ${m[1]}%`]],
+ [/^(?:Exportando MP4|Exporting MP4): (.+) \/ (.+)$/,m => [`Exporting MP4: ${m[1]} / ${m[2]}`,`Exportando MP4: ${m[1]} / ${m[2]}`]],
+ [/^(?:Speech recognition|Reconocimiento de voz): (.+)\.$/,m => [`Speech recognition: ${m[1]}.`,`Reconocimiento de voz: ${m[1]}.`]],
+ [/^(?:What is|¿Cuánto es) (\d+) \+ (\d+)\?$/,m => [`What is ${m[1]} + ${m[2]}?`,`¿Cuánto es ${m[1]} + ${m[2]}?`]]
+];
+function translate(value) {
+ const text = normalize(value), entry = index.get(text);
+ if (entry) return entry[lang];
+ for (const [regex,make] of patterns) { const m = text.match(regex); if (m) return make(m)[lang === 'es' ? 1 : 0]; }
+ // Error prefix and body translated independently, preserving all known application messages.
+ const prefix = text.match(/^(Transcripción|Transcription|Download|Descarga): ([\s\S]+)$/);
+ if (prefix) return ((prefix[1] === 'Transcripción' || prefix[1] === 'Transcription') ? (lang === 'es' ? 'Transcripción' : 'Transcription') : (lang === 'es' ? 'Descarga' : 'Download')) + ': ' + translate(prefix[2]);
+ return value;
+}
+window.RVI18N = {
+ t:translate,
+ error(kind,e) {
+  console.error('ReelVibe '+kind,e);
+  const known = index.has(normalize(e?.message || ''));
+  const body = known ? e.message : 'An unexpected browser or network error occurred. Check compatibility, connectivity and CORS; see the browser console for technical details.';
+  return translate((kind === 'transcription' ? 'Transcription' : 'Download') + ': '+body);
+ }
+};
+function isProtected(el) {
+ return !el || !!el.closest('script,style,textarea,#caption,[data-rv-user-content]');
+}
+function translateTree(root) {
+ if (root.nodeType === Node.TEXT_NODE) {
+  if (!isProtected(root.parentElement) && root.nodeValue.trim()) {
+   const result = translate(root.nodeValue);
+   if (result !== root.nodeValue) root.nodeValue = root.nodeValue.replace(root.nodeValue.trim(),result.trim());
+  }
+  return;
+ }
+ if (root.nodeType !== Node.ELEMENT_NODE && root.nodeType !== Node.DOCUMENT_NODE) return;
+ if (root.nodeType === Node.ELEMENT_NODE && isProtected(root)) {
+  // Textarea content is user data, but its placeholder/accessible label is interface text.
+  if (root.tagName === 'TEXTAREA') translateAttributes(root);
+  return;
+ }
+ if (root.nodeType === Node.ELEMENT_NODE) translateAttributes(root);
+ for (const child of [...root.childNodes]) translateTree(child);
+}
+function translateAttributes(el) {
+ for (const name of ['aria-label','title','placeholder','aria-description']) {
+  if (!el.hasAttribute(name)) continue;
+  const before = el.getAttribute(name), after = translate(before);
+  if (before !== after) el.setAttribute(name,after);
+ }
+}
+let observer;
+function observe() { observer.observe(document.documentElement,{subtree:true,childList:true,characterData:true,attributes:true,attributeFilter:['aria-label','title','placeholder','aria-description']}); }
+function setLanguage(next) {
+ lang = next === 'es' ? 'es' : 'en';
+ document.documentElement.lang = lang;
+ document.getElementById('rvUiLanguage').value = lang;
+ try { localStorage.setItem('rv-interface-language',lang); } catch {}
+ observer.disconnect();translateTree(document.documentElement);observe();
+}
+observer = new MutationObserver(records => {
+ observer.disconnect();
+ for (const record of records) {
+  if (record.type === 'childList') for (const node of record.addedNodes) translateTree(node);
+  else if (record.type === 'characterData') translateTree(record.target);
+  else translateAttributes(record.target);
+ }
+ observe();
+});
+document.getElementById('rvUiLanguage').addEventListener('change',e => setLanguage(e.target.value));
+setLanguage(lang);
+})();
+
+</script>
+<script>
+(() => {
+  "use strict";
+
+  const $ = id => document.getElementById(id);
+  const video = $("video");
+  const audio = $("audio");
+
+  const tracks = {
+    video: { element: video, ready: false, objectUrl: null },
+    audio: { element: audio, ready: false, objectUrl: null }
+  };
+
+  let frame = 0;
+  let audioPlayPending = false;
+  let recognition = null;
+  let listening = false;
+  let rvCues = [];
+  let rvJob = null;
+  let rvAsr = null;
+  let rvCaptionFrame = 0;
+
+  const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+  const status = message => { $("status").textContent = message; };
+
+  function formatTime(seconds) {
+    seconds = Math.max(0, Number(seconds) || 0);
+    const minutes = Math.floor(seconds / 60);
+    return `${minutes}:${String(Math.floor(seconds % 60)).padStart(2, "0")}`;
+  }
+
+  function bounds(kind) {
+    return [
+      Number.isFinite(Number($(kind + "In").value)) ? Number($(kind + "In").value) : 0,
+      Number.isFinite(Number($(kind + "Out").value)) ? Number($(kind + "Out").value) : 0
+    ];
+  }
+
+  function updateClock() {
+    const [start, end] = bounds("video");
+    $("clock").textContent =
+      `${formatTime(video.currentTime - start)} / ${formatTime(end - start)}`;
+    $("seek").value = clamp(video.currentTime || start, start, end);
+  }
+
+  function pauseAll() {
+    video.pause();
+    audio.pause();
+    cancelAnimationFrame(frame);
+    $("play").textContent = "▶ Play";
+    $("play").disabled = !tracks.video.ready;
+    $("pause").disabled = true;
+    updateClock();
+  }
+
+  // Added audio is mapped to elapsed time within the selected video segment.
+  // When its trimmed segment ends, the remaining video plays without it.
+  function syncAudio(force = false) {
+    if (!tracks.audio.ready || !tracks.video.ready) return;
+
+    const [vStart, vEnd] = bounds("video");
+    const [aStart, aEnd] = bounds("audio");
+    const elapsed = video.currentTime - vStart;
+    const target = aStart + Math.max(0, elapsed);
+    const active = elapsed >= -0.02 &&
+      video.currentTime < vEnd && target < aEnd;
+
+    if (!active) {
+      audio.pause();
+      return;
+    }
+
+    if (force || Math.abs(audio.currentTime - target) > 0.2) {
+      audio.currentTime = clamp(target, aStart, aEnd);
+    }
+
+    if (!video.paused && audio.paused && !audioPlayPending) {
+      audioPlayPending = true;
+      audio.play().catch(() => {
+        status("Added audio could not play. Check its format or browser permissions.");
+      }).finally(() => {
+        audioPlayPending = false;
+        if (video.paused) audio.pause();
+      });
+    } else if (video.paused) {
+      audio.pause();
+    }
+  }
+
+  async function playPreview() {
+    if (!tracks.video.ready) return;
+
+    const [start, end] = bounds("video");
+    if (video.currentTime < start || video.currentTime >= end - .02) {
+      video.currentTime = start;
+    }
+
+    try {
+      // Start both media elements from the same user gesture.
+      const videoPromise = video.play();
+      syncAudio(true);
+      await videoPromise;
+      syncAudio(true);
+    } catch {
+      pauseAll();
+      status("Playback failed. Try a supported video format or another direct URL.");
+    }
+  }
+
+  function tick() {
+    if (video.paused) return;
+
+    const [start, end] = bounds("video");
+    if (video.currentTime >= end) {
+      if ($("loop").checked) {
+        video.currentTime = start;
+        syncAudio(true);
+      } else {
+        pauseAll();
+        video.currentTime = end;
+        updateClock();
+        return;
+      }
+    }
+
+    syncAudio();
+    updateClock();
+    frame = requestAnimationFrame(tick);
+  }
+
+  video.addEventListener("play", () => {
+    $("play").textContent = "▶ Play";
+    $("play").disabled = true;
+    $("pause").disabled = false;
+    cancelAnimationFrame(frame);
+    frame = requestAnimationFrame(tick);
+  });
+
+  video.addEventListener("pause", () => {
+    audio.pause();
+    cancelAnimationFrame(frame);
+    $("play").textContent = "▶ Play";
+    $("play").disabled = !tracks.video.ready;
+    $("pause").disabled = true;
+    updateClock();
+  });
+
+  video.addEventListener("ended", () => {
+    if ($("loop").checked) {
+      video.currentTime = bounds("video")[0];
+      playPreview();
+    } else {
+      pauseAll();
+    }
+  });
+
+  video.addEventListener("seeking", () => syncAudio(true));
+  video.addEventListener("timeupdate", updateClock);
+
+  $("play").addEventListener("click", playPreview);
+  $("pause").addEventListener("click", pauseAll);
+  $("stop").addEventListener("click", () => {
+    if (!tracks.video.ready) return;
+    pauseAll();
+    video.currentTime = bounds("video")[0];
+    syncAudio(true);
+    updateClock();
+    status("Video detenido al inicio del segmento seleccionado.");
+  });
+  function renderLoop() {
+    $("toggleLoop").setAttribute("aria-pressed", String($("loop").checked));
+    $("toggleLoop").textContent = $("loop").checked ? "↻ Loop: ON" : "↻ Loop: OFF";
+  }
+  $("toggleLoop").addEventListener("click", () => {
+    $("loop").checked = !$("loop").checked;
+    renderLoop();
+  });
+  $("loop").addEventListener("change", renderLoop);
+  $("editTranscript").addEventListener("click", () => {
+    $("transcript").focus();
+    $("transcript").scrollIntoView({ behavior: "smooth", block: "center" });
+    status("Escribe o pega la transcripción. Después arrastra el texto en la vista previa.");
+  });
+  $("applyVideoTrim").addEventListener("click", () => {
+    if (!tracks.video.ready) return;
+    $("videoIn").dispatchEvent(new Event("change"));
+    $("videoOut").dispatchEvent(new Event("change"));
+    status("Recorte aplicado a la vista previa; el archivo original no se modifica.");
+  });
+
+  $("restart").addEventListener("click", () => {
+    if (!tracks.video.ready) return;
+    video.currentTime = bounds("video")[0];
+    syncAudio(true);
+    updateClock();
+    playPreview();
+  });
+
+  $("seek").addEventListener("input", event => {
+    video.currentTime = Number(event.target.value);
+    syncAudio(true);
+    updateClock();
+  });
+
+  $("videoVolume").addEventListener("input", event => {
+    video.volume = Number(event.target.value);
+  });
+  $("audioVolume").addEventListener("input", event => {
+    audio.volume = Number(event.target.value);
+  });
+  video.volume = .7;
+  audio.volume = .8;
+
+  $("fit").addEventListener("change", event => {
+    video.style.objectFit = event.target.value;
+  });
+
+  function clearTrack(kind) {
+    const track = tracks[kind];
+    track.element.pause();
+    track.element.removeAttribute("src");
+    track.element.load();
+    if (track.objectUrl) URL.revokeObjectURL(track.objectUrl);
+    track.objectUrl = null;
+    track.ready = false;
+    for (const action of ["MarkIn", "MarkOut", "ResetTrim"]) {
+      $(kind + action).disabled = true;
+    }
+
+    for (const suffix of ["In", "Out"]) {
+      $(kind + suffix).value = 0;
+      $(kind + suffix).disabled = true;
+    }
+
+    if (kind === "video") {
+      for (const id of ["play", "pause", "stop", "restart", "seek", "applyVideoTrim", "extractAudio"]) $(id).disabled = true;
+      $("placeholder").hidden = false;
+      $("clock").textContent = "0:00 / 0:00";
+    }
+  }
+
+  function loadSource(kind, source, isFile) {
+    pauseAll();
+    clearTrack(kind);
+    const track = tracks[kind];
+
+    if (isFile) {
+      track.objectUrl = URL.createObjectURL(source);
+      track.element.src = track.objectUrl;
+    } else {
+      track.element.src = source;
+    }
+
+    track.element.load();
+    status(`Loading ${kind}…`);
+  }
+
+  for (const kind of ["video", "audio"]) {
+    $(kind + "Url").addEventListener("keydown", event => {
+      if (event.key === "Enter") { event.preventDefault(); $(kind === "video" ? "loadVideo" : "loadAudio").click(); }
+    });
+    const track = tracks[kind];
+
+    $(kind + "File").addEventListener("change", event => {
+      const file = event.target.files[0];
+      if (file) loadSource(kind, file, true);
+    });
+
+    $("load" + kind[0].toUpperCase() + kind.slice(1))
+      .addEventListener("click", () => {
+        try {
+          const url = new URL($(kind + "Url").value.trim());
+          if (!["http:", "https:"].includes(url.protocol)) {
+            throw new Error("Unsupported URL");
+          }
+          loadSource(kind, url.href, false);
+        } catch {
+          status("Enter a valid HTTP or HTTPS media URL.");
+        }
+      });
+
+    track.element.addEventListener("loadedmetadata", () => {
+      const duration = track.element.duration;
+      if (!Number.isFinite(duration) || duration <= 0) {
+        clearTrack(kind);
+        status("Use a finite-duration media file; live streams are not supported.");
+        return;
+      }
+
+      track.ready = true;
+      for (const action of ["MarkIn", "MarkOut", "ResetTrim"]) {
+        $(kind + action).disabled = false;
+      }
+      $(kind + "In").value = 0;
+      $(kind + "Out").value = duration.toFixed(3);
+
+      for (const suffix of ["In", "Out"]) {
+        $(kind + suffix).disabled = false;
+        $(kind + suffix).max = duration;
+      }
+
+      if (kind === "video") {
+        $("placeholder").hidden = true;
+        for (const id of ["play", "stop", "restart", "seek", "applyVideoTrim"]) $(id).disabled = false;
+        $("pause").disabled = true;
+        $("extractAudio").disabled = !track.objectUrl || !(window.AudioContext || window.webkitAudioContext) || !window.MediaRecorder;
+        $("seek").min = 0;
+        $("seek").max = duration;
+        updateClock();
+      }
+
+      status(`${kind === "video" ? "Video" : "Audio"} ready · ${formatTime(duration)}.`);
+    });
+
+    track.element.addEventListener("error", () => {
+      if (!track.element.getAttribute("src")) return;
+      pauseAll();
+      clearTrack(kind);
+      status(`Unable to load ${kind}. Check the codec, direct URL, server restrictions, or mixed-content blocking.`);
+    });
+
+    for (const suffix of ["In", "Out"]) {
+      $(kind + suffix).addEventListener("change", () => {
+        if (!track.ready) return;
+        pauseAll();
+
+        const duration = track.element.duration;
+        const gap = Math.min(.05, duration);
+        let [start, end] = bounds(kind);
+
+        start = clamp(start, 0, Math.max(0, duration - gap));
+        end = clamp(end, gap, duration);
+
+        if (end <= start) {
+          if (suffix === "In") start = Math.max(0, end - gap);
+          else end = Math.min(duration, start + gap);
+        }
+
+        $(kind + "In").value = start.toFixed(3);
+        $(kind + "Out").value = end.toFixed(3);
+
+        if (kind === "video") {
+          $("seek").min = start;
+          $("seek").max = end;
+          video.currentTime = start;
+        }
+
+        syncAudio(true);
+        updateClock();
+        status("Trim updated.");
+      });
+    }
+  }
+
+  // Added trim buttons reuse the existing trim validation and playback logic.
+  for (const kind of ["video", "audio"]) {
+    for (const suffix of ["In", "Out"]) {
+      $(kind + "Mark" + suffix).addEventListener("click", () => {
+        if (!tracks[kind].ready) return;
+        const element = tracks[kind].element;
+        // Added audio uses the current video playhead as its reference.
+        let point = element.currentTime;
+        if (kind === "audio" && tracks.video.ready) {
+          point = bounds("audio")[0] + Math.max(0, video.currentTime - bounds("video")[0]);
+        }
+        $(kind + suffix).value = clamp(point, 0, element.duration).toFixed(3);
+        $(kind + suffix).dispatchEvent(new Event("change"));
+      });
+    }
+    $(kind + "ResetTrim").addEventListener("click", () => {
+      if (!tracks[kind].ready) return;
+      $(kind + "In").value = 0;
+      $(kind + "Out").value = tracks[kind].element.duration;
+      $(kind + "Out").dispatchEvent(new Event("change"));
+    });
+  }
+
+  $("removeAudio").addEventListener("click", () => {
+    pauseAll();
+    clearTrack("audio");
+    $("audioFile").value = "";
+    $("audioUrl").value = "";
+    status("Added audio removed.");
+  });
+
+  let extractionJob = null;
+  $("cancelExtraction").addEventListener("click", () => {
+    if (extractionJob) extractionJob.cancel();
+  });
+  $("extractAudio").addEventListener("click", async () => {
+    if (extractionJob || rvJob || !tracks.video.ready || !tracks.video.objectUrl) return;
+    if (listening) { status("Stop microphone dictation before separating audio."); return; }
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass || !window.MediaRecorder) {
+      status("Este navegador no permite separar audio con esta página.");
+      return;
+    }
+    pauseAll();
+    const sourceUrl = tracks.video.objectUrl;
+    const [start, end] = bounds("video");
+    let ctx = null;
+    const player = document.createElement("video");
+    player.playsInline = true;
+    player.preload = "auto";
+    let output = null;
+    let ownedUrl = null, recorder = null, sourceNode = null, timer = null;
+    let cancelled = false, rejectPending = null;
+    const chunks = [];
+    const job = { cancel() {
+      cancelled = true;
+      player.pause();
+      if (rejectPending) rejectPending(new Error("cancelled"));
+      if (recorder && recorder.state !== "inactive") recorder.stop();
+    }};
+    extractionJob = job;
+    $("extractAudio").disabled = true;
+    $("cancelExtraction").hidden = false;
+    function waitForMedia(name, action) {
+      return new Promise((resolve, reject) => {
+        let timeout;
+        const cleanup = () => {
+          clearTimeout(timeout);
+          player.removeEventListener(name, done);
+          player.removeEventListener("error", fail);
+          rejectPending = null;
+        };
+        const done = () => { cleanup(); resolve(); };
+        const fail = () => { cleanup(); reject(new Error("media")); };
+        rejectPending = error => { cleanup(); reject(error); };
+        player.addEventListener(name, done, { once: true });
+        player.addEventListener("error", fail, { once: true });
+        timeout = setTimeout(fail, 30000);
+        action();
+      });
+    }
+    try {
+      // Resume within the button's user gesture; output is recorded, not sent to speakers.
+      ctx = new AudioContextClass();
+      output = ctx.createMediaStreamDestination();
+      await ctx.resume();
+      if (ctx.state !== "running") throw new Error("context");
+      const response = await fetch(sourceUrl);
+      if (!response.ok) throw new Error("source");
+      const blob = await response.blob();
+      if (cancelled) throw new Error("cancelled");
+      ownedUrl = URL.createObjectURL(blob);
+      await waitForMedia("loadedmetadata", () => { player.src = ownedUrl; player.load(); });
+      if (start > 0) await waitForMedia("seeked", () => { player.currentTime = start; });
+      if (cancelled) throw new Error("cancelled");
+      sourceNode = ctx.createMediaElementSource(player);
+      sourceNode.connect(output);
+      const types = ["audio/webm;codecs=opus", "audio/ogg;codecs=opus", "audio/mp4", "audio/webm"];
+      const mimeType = types.find(type => MediaRecorder.isTypeSupported(type));
+      recorder = mimeType ? new MediaRecorder(output.stream, { mimeType }) : new MediaRecorder(output.stream);
+      recorder.ondataavailable = event => { if (event.data.size) chunks.push(event.data); };
+      const recorded = new Promise((resolve, reject) => {
+        rejectPending = reject;
+        recorder.onstop = resolve;
+        recorder.onerror = () => reject(new Error("recording"));
+      });
+      recorded.catch(() => {});
+      const finish = () => {
+        player.pause();
+        if (recorder.state !== "inactive") recorder.stop();
+      };
+      player.addEventListener("ended", finish, { once: true });
+      player.addEventListener("error", () => {
+        if (rejectPending) rejectPending(new Error("media"));
+      }, { once: true });
+      recorder.start(250);
+      const playback = player.play();
+      // Consume recording rejections even when playback itself fails.
+      await Promise.all([playback, (async () => {
+        timer = setInterval(() => {
+          if (cancelled || player.currentTime >= end) finish();
+          else status(`Separando audio: ${formatTime(player.currentTime - start)} / ${formatTime(end - start)}. Se procesa en tiempo real.`);
+        }, 40);
+        await recorded;
+      })()]);
+      rejectPending = null;
+      if (cancelled) throw new Error("cancelled");
+      if (!chunks.length) throw new Error("empty");
+      const actualType = recorder.mimeType || chunks[0].type || "audio/webm";
+      const result = new Blob(chunks, { type: actualType });
+      const ext = actualType.includes("mp4") ? "m4a" : actualType.includes("ogg") ? "ogg" : "webm";
+      const name = `ReelVibe-audio.${ext}`;
+      const downloadUrl = URL.createObjectURL(result);
+      const link = document.createElement("a");
+      link.href = downloadUrl;
+      link.download = name;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(downloadUrl), 60000);
+      // Only add to the preview if its source and trim have not changed meanwhile.
+      const currentBounds = bounds("video");
+      if (tracks.video.objectUrl === sourceUrl && currentBounds[0] === start && currentBounds[1] === end) {
+        loadSource("audio", new File([result], name, { type: actualType }), true);
+        $("videoVolume").value = 0;
+        video.volume = 0;
+      }
+      status("Audio separado: descarga solicitada. Se añade a la vista previa si no cambiaste el video; el original se silencia para evitar duplicarlo.");
+    } catch (error) {
+      status(cancelled ? "Separación de audio cancelada." : "No se pudo separar el audio. Usa un video local compatible y un navegador con Web Audio y MediaRecorder.");
+    } finally {
+      clearInterval(timer);
+      if (recorder && recorder.state !== "inactive") recorder.stop();
+      player.pause();
+      player.removeAttribute("src");
+      player.load();
+      if (sourceNode) sourceNode.disconnect();
+      if (output) output.stream.getTracks().forEach(track => track.stop());
+      if (ctx) await ctx.close().catch(() => {});
+      if (ownedUrl) URL.revokeObjectURL(ownedUrl);
+      extractionJob = null;
+      $("cancelExtraction").hidden = true;
+      $("extractAudio").disabled = !tracks.video.ready || !tracks.video.objectUrl;
+    }
+  });
+
+  function renderCaption() {
+    const caption = $("caption");
+    const x = Number($("captionX").value);
+    const y = Number($("captionY").value);
+    const size = Number($("fontSize").value);
+
+    // textContent prevents caption text from being interpreted as HTML.
+    caption.textContent = rvCaptionAt(video.currentTime);
+    caption.style.fontFamily = $("font").value;
+    caption.style.fontWeight = $("fontWeight").value;
+    caption.style.color = $("textColor").value;
+    caption.style.left = x + "%";
+    caption.style.top = y + "%";
+
+    // Keep the entire text box inside the frame at edge positions.
+    caption.style.maxWidth = Math.min(88, 2 * Math.min(x, 100 - x)) + "%";
+    caption.style.background = $("captionBackground").checked
+      ? "rgba(0,0,0,.5)" : "transparent";
+
+    // Font sizes are relative to a 350px-wide design canvas.
+    const width = document.querySelector(".preview-wrap").clientWidth;
+    caption.style.fontSize = (size * width / 350) + "px";
+
+    $("sizeValue").textContent = size;
+    $("xValue").textContent = x;
+    $("yValue").textContent = y;
+    $("safeGuide").style.display = $("showGuides").checked ? "block" : "none";
+  }
+
+  [
+    "transcript", "font", "fontWeight", "fontSize", "textColor",
+    "captionX", "captionY", "captionBackground", "showGuides"
+  ].forEach(id => {
+    $(id).addEventListener("input", () => {
+      if (id === "captionX" || id === "captionY") $("position").value = "custom";
+      renderCaption();
+    });
+  });
+
+  $("position").addEventListener("change", event => {
+    const presets = { top: 20, center: 50, bottom: 75 };
+    if (event.target.value in presets) {
+      $("captionX").value = 50;
+      $("captionY").value = presets[event.target.value];
+    }
+    renderCaption();
+  });
+
+  if ("ResizeObserver" in window) {
+    new ResizeObserver(renderCaption)
+      .observe(document.querySelector(".preview-wrap"));
+  } else {
+    window.addEventListener("resize", renderCaption);
+  }
+  renderCaption();
+
+  // Added: drag the existing caption without changing the surrounding layout.
+  const draggableCaption = $("caption");
+  const previewFrame = document.querySelector(".preview-wrap");
+  let captionDrag = null;
+
+  function moveCaption(x, y) {
+    $("captionX").value = clamp(x, 10, 90);
+    $("captionY").value = clamp(y, 10, 90);
+    $("position").value = "custom";
+    renderCaption();
+    // Keep the rendered box vertically inside the preview where it fits.
+    const halfHeight = draggableCaption.getBoundingClientRect().height / 2;
+    const margin = Math.min(50, halfHeight / previewFrame.clientHeight * 100);
+    const minY = Math.max(10, margin);
+    const maxY = Math.min(90, 100 - margin);
+    const adjustedY = clamp(Number($("captionY").value), minY, maxY);
+    if (adjustedY !== Number($("captionY").value)) {
+      $("captionY").value = Math.round(adjustedY);
+      renderCaption();
+    }
+  }
+
+  draggableCaption.addEventListener("pointerdown", event => {
+    if (!draggableCaption.textContent.trim() || !event.isPrimary || event.button !== 0) return;
+    const rect = previewFrame.getBoundingClientRect();
+    captionDrag = {
+      id: event.pointerId,
+      offsetX: event.clientX - rect.left - previewFrame.clientLeft -
+        Number($("captionX").value) / 100 * previewFrame.clientWidth,
+      offsetY: event.clientY - rect.top - previewFrame.clientTop -
+        Number($("captionY").value) / 100 * previewFrame.clientHeight
+    };
+    draggableCaption.setPointerCapture(event.pointerId);
+    draggableCaption.classList.add("dragging");
+    draggableCaption.focus({ preventScroll: true });
+    event.preventDefault();
+  });
+
+  draggableCaption.addEventListener("pointermove", event => {
+    if (!captionDrag || captionDrag.id !== event.pointerId) return;
+    const rect = previewFrame.getBoundingClientRect();
+    moveCaption(
+      (event.clientX - rect.left - previewFrame.clientLeft - captionDrag.offsetX) /
+        previewFrame.clientWidth * 100,
+      (event.clientY - rect.top - previewFrame.clientTop - captionDrag.offsetY) /
+        previewFrame.clientHeight * 100
+    );
+  });
+
+  function finishCaptionDrag(event) {
+    if (!captionDrag || captionDrag.id !== event.pointerId) return;
+    captionDrag = null;
+    draggableCaption.classList.remove("dragging");
+    if (draggableCaption.hasPointerCapture(event.pointerId)) {
+      draggableCaption.releasePointerCapture(event.pointerId);
+    }
+  }
+  for (const name of ["pointerup", "pointercancel", "lostpointercapture"]) {
+    draggableCaption.addEventListener(name, finishCaptionDrag);
+  }
+  draggableCaption.addEventListener("keydown", event => {
+    const directions = {
+      ArrowLeft: [-1, 0], ArrowRight: [1, 0],
+      ArrowUp: [0, -1], ArrowDown: [0, 1]
+    };
+    if (!(event.key in directions)) return;
+    event.preventDefault();
+    const [dx, dy] = directions[event.key];
+    const step = event.shiftKey ? 5 : 1;
+    moveCaption(Number($("captionX").value) + dx * step,
+      Number($("captionY").value) + dy * step);
+  });
+
+  // Web Speech API: live microphone recognition, not media-file transcription.
+  const SpeechRecognition =
+    window.SpeechRecognition || window.webkitSpeechRecognition;
+
+  function setListening(value) {
+    listening = value;
+    $("dictate").textContent = value ? "■ Detener transcripción" : "● Transcribir micrófono";
+    $("dictate").classList.toggle("recording", value);
+    $("speechLanguage").disabled = value;
+  }
+
+  if (!SpeechRecognition) {
+    $("dictate").disabled = true;
+    $("speechHint").textContent =
+      "Speech recognition is unavailable in this browser. You can still type or paste captions.";
+  } else if (!window.isSecureContext) {
+    $("dictate").disabled = true;
+    $("speechHint").textContent =
+      "Microphone dictation needs HTTPS or localhost. You can still type or paste captions.";
+  } else {
+    recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+
+    let baseText = "";
+    let finalized = "";
+
+    recognition.onstart = () => {
+      setListening(true);
+      status("Listening through your microphone…");
+    };
+
+    recognition.onresult = event => {
+      let interim = "";
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const text = event.results[i][0].transcript.trim();
+        if (event.results[i].isFinal) finalized += text + " ";
+        else interim += text + " ";
+      }
+      $("transcript").value =
+        [baseText, finalized.trim(), interim.trim()].filter(Boolean).join(" ");
+      $("rvTimed").checked = false;
+      renderCaption();
+    };
+
+    recognition.onerror = event => {
+      const messages = {
+        "not-allowed": "Microphone access was denied. Allow it in your browser settings.",
+        "audio-capture": "No microphone is available.",
+        "network": "Speech recognition could not reach its service.",
+        "no-speech": "No speech was detected. Try starting dictation again.",
+        "language-not-supported": "The selected speech language is not supported."
+      };
+      status(messages[event.error] || `Speech recognition: ${event.error}.`);
+    };
+
+    recognition.onend = () => {
+      setListening(false);
+    };
+
+    $("dictate").addEventListener("click", () => {
+      if (listening) {
+        recognition.stop();
+        status("Dictation stopped.");
+        return;
+      }
+
+      if (rvJob || extractionJob) { status("Wait for the current process to finish before starting dictation."); return; }
+      baseText = $("transcript").value.trim();
+      finalized = "";
+      recognition.lang = $("speechLanguage").value;
+
+      try {
+        recognition.start();
+        setListening(true);
+      } catch {
+        setListening(false);
+        status("Could not start dictation. Wait a moment and try again.");
+      }
+    });
+  }
+
+
+  // ReelVibe additions: local ASR, cue editor and genuine MP4 recording.
+  // No API key, no audio upload, no replacement of the original controls.
+  const rvLang = { 'en-US':'english', 'en-GB':'english', 'es-ES':'spanish',
+    'fr-FR':'french', 'de-DE':'german', 'pt-BR':'portuguese',
+    'hi-IN':'hindi', 'ja-JP':'japanese' };
+
+  function rvCaptionAt(time, cueList = rvCues, timed = $('rvTimed').checked,
+    base = bounds('video')[0], fallback = $('transcript').value) {
+    if (!timed) return fallback;
+    const elapsed = time - base;
+    return cueList.filter(c => elapsed >= c.start && elapsed < c.end)
+      .map(c => c.text).filter(Boolean).join('\n');
+  }
+  function rvRefreshCaption() { renderCaption(); }
+  function rvCaptionTick() {
+    if ($('rvTimed').checked) renderCaption();
+    if (!video.paused) rvCaptionFrame = requestAnimationFrame(rvCaptionTick);
+  }
+  video.addEventListener('play', () => {
+    cancelAnimationFrame(rvCaptionFrame);
+    rvCaptionFrame = requestAnimationFrame(rvCaptionTick);
+  });
+  for (const name of ['timeupdate','seeked','pause','loadedmetadata'])
+    video.addEventListener(name, rvRefreshCaption);
+  $('rvTimed').addEventListener('change', rvRefreshCaption);
+  $('transcript').addEventListener('input', () => {
+    $('rvTimed').checked = false;
+    renderCaption();
+  });
+
+  function rvSyncTranscript() {
+    $('transcript').value = [...rvCues].sort((a,b) => a.start-b.start).map(c => c.text).join('\n');
+    renderCaption();
+  }
+  function rvRenderCues() {
+    const host = $('rvCues'); host.replaceChildren();
+    rvCues.forEach((cue,index) => {
+      const row = document.createElement('div'); row.className = 'rv-cue';
+      const title = document.createElement('strong'); title.textContent = `Subtítulo ${index+1}`;
+      row.append(title);
+      const times = document.createElement('div'); times.className = 'grid2';
+      for (const [key,label] of [['start','Inicio · segundos'],['end','Final · segundos']]) {
+        const wrap = document.createElement('label'); wrap.textContent = label;
+        const input = document.createElement('input');
+        input.type = 'number'; input.min = '0'; input.step = '.01'; input.value = cue[key].toFixed(2);
+        input.addEventListener('change', () => {
+          const duration = Math.max(.01, bounds('video')[1]-bounds('video')[0]);
+          const n = Number(input.value);
+          if (Number.isFinite(n)) cue[key] = key === 'start' ? clamp(n,0,Math.max(0,duration-.01)) : clamp(n,.01,duration);
+          cue.start = clamp(cue.start,0,Math.max(0,duration-.01));
+          cue.end = clamp(cue.end,cue.start+.01,duration);
+          if (cue.end <= cue.start) {
+            if (key === 'start') cue.start = Math.max(0,cue.end-.01);
+            else cue.end = Math.min(duration,cue.start+.01);
+          }
+          rvSyncTranscript(); rvRenderCues();
+        });
+        wrap.append(input); times.append(wrap);
+      }
+      row.append(times);
+      const text = document.createElement('textarea'); text.value = cue.text;
+      text.setAttribute('aria-label',`Texto del subtítulo ${index+1}`);
+      text.addEventListener('input', () => { cue.text = text.value; rvSyncTranscript(); });
+      row.append(text);
+      const actions = document.createElement('div'); actions.className = 'rv-actions';
+      const jump = document.createElement('button'); jump.type = 'button'; jump.textContent = '▶ Ver';
+      jump.addEventListener('click', () => {
+        if (!tracks.video.ready) return;
+        pauseAll(); $('rvTimed').checked = true;
+        video.currentTime = clamp(bounds('video')[0]+cue.start,...bounds('video'));
+        renderCaption();
+      });
+      const remove = document.createElement('button'); remove.type = 'button'; remove.textContent = 'Eliminar';
+      remove.addEventListener('click', () => { rvCues.splice(index,1); rvSyncTranscript(); rvRenderCues(); });
+      actions.append(jump,remove); row.append(actions); host.append(row);
+    });
+  }
+  $('rvAddCue').addEventListener('click', () => {
+    if (!tracks.video.ready) { status('Carga un video antes de añadir subtítulos temporizados.'); return; }
+    const [start,end] = bounds('video');
+    const point = clamp(video.currentTime-start,0,Math.max(0,end-start-.01));
+    rvCues.push({start:point,end:Math.min(end-start,point+3),text:window.RVI18N.t('Nuevo subtítulo')});
+    $('rvTimed').checked = true; rvSyncTranscript(); rvRenderCues();
+  });
+  function rvSave(blob,name) {
+    const url = URL.createObjectURL(blob), link = document.createElement('a');
+    link.href = url; link.download = name; document.body.append(link); link.click(); link.remove();
+    setTimeout(() => URL.revokeObjectURL(url),60000);
+  }
+  function rvSrtTime(seconds) {
+    const ms = Math.max(0,Math.round(seconds*1000));
+    return `${String(Math.floor(ms/3600000)).padStart(2,'0')}:${String(Math.floor(ms/60000)%60).padStart(2,'0')}:${String(Math.floor(ms/1000)%60).padStart(2,'0')},${String(ms%1000).padStart(3,'0')}`;
+  }
+  $('rvSrt').addEventListener('click', () => {
+    if (!rvCues.length) { status('No hay subtítulos para descargar.'); return; }
+    const text = [...rvCues].sort((a,b) => a.start-b.start).map((c,i) =>
+      `${i+1}\n${rvSrtTime(c.start)} --> ${rvSrtTime(c.end)}\n${c.text}\n`).join('\n');
+    rvSave(new Blob([text],{type:'application/x-subrip;charset=utf-8'}),'ReelVibe-subtitulos.srt');
+  });
+
+  function rvMessage(text,value) {
+    $('rvTaskStatus').textContent = text; status(text);
+    if (value !== undefined) {
+      $('rvProgress').hidden = false;
+      if (value === null) $('rvProgress').removeAttribute('value');
+      else $('rvProgress').value = clamp(value,0,1);
+    }
+  }
+  function rvBegin(kind) {
+    if (rvJob || extractionJob) throw new Error('Espera o cancela el proceso que ya está en marcha.');
+    if (listening) throw new Error('Detén la transcripción del micrófono antes de continuar.');
+    pauseAll();
+    const job = {kind, cancelled:false, abort:new AbortController(), cleanups:[], disabled:[]};
+    rvJob = job;
+    for (const el of document.querySelectorAll('button,input,select,textarea')) {
+      if (el.id === 'rvCancel') continue;
+      job.disabled.push([el,el.disabled]); el.disabled = true;
+    }
+    $('rvCancel').hidden = false; $('rvCancel').disabled = false;
+    job.check = () => { if (job.cancelled) throw new Error('Proceso cancelado.'); };
+    return job;
+  }
+  async function rvEnd(job) {
+    for (const cleanup of job.cleanups.reverse()) { try { await cleanup(); } catch {} }
+    for (const [el,disabled] of job.disabled) if (el.isConnected) el.disabled = disabled;
+    $('rvCancel').hidden = true; rvJob = null;
+  }
+  $('rvCancel').addEventListener('click', () => {
+    if (!rvJob) return;
+    rvJob.cancelled = true; rvJob.abort.abort();
+    rvMessage('Cancelando… La carga o inferencia del modelo puede tardar en terminar.');
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden && rvJob?.kind === 'export') {
+      rvJob.cancelled = true; rvJob.abort.abort();
+      rvMessage('Exportación cancelada: mantén la pestaña visible para evitar un video incompleto.');
+    }
+  });
+  function rvWaitMedia(el,event,action,job) {
+    return new Promise((resolve,reject) => {
+      let timer;
+      const clean = () => {
+        clearTimeout(timer); el.removeEventListener(event,done); el.removeEventListener('error',fail);
+        job.abort.signal.removeEventListener('abort',abort);
+      };
+      const done = () => { clean(); resolve(); };
+      const fail = () => { clean(); reject(new Error('No se pudo cargar el medio. Revisa formato, URL y permisos CORS.')); };
+      const abort = () => { clean(); reject(new Error('Proceso cancelado.')); };
+      el.addEventListener(event,done,{once:true}); el.addEventListener('error',fail,{once:true});
+      job.abort.signal.addEventListener('abort',abort,{once:true});
+      timer = setTimeout(fail,60000);
+      try { job.check(); action(); } catch(e) { clean(); reject(e); }
+    });
+  }
+  async function rvPlayer(kind,job) {
+    const el = document.createElement(kind === 'video' ? 'video':'audio');
+    if (kind === 'video') el.playsInline = true;
+    el.preload = 'auto'; el.crossOrigin = 'anonymous';
+    job.cleanups.push(() => { el.pause(); el.removeAttribute('src'); el.load(); });
+    await rvWaitMedia(el,'loadedmetadata', () => {
+      el.src = tracks[kind].element.currentSrc || tracks[kind].element.src; el.load();
+    },job);
+    return el;
+  }
+  async function rvSeek(el,time,job) {
+    if (Math.abs(el.currentTime-time)<.001) return;
+    await rvWaitMedia(el,'seeked',() => { el.currentTime=time; },job);
+  }
+  async function rvMono(buffer,start,end,job) {
+    job.check();
+    if (!(end > start)) throw new Error('El segmento no contiene audio decodificable.');
+    const samples = Math.max(1,Math.ceil((end-start)*16000));
+    const offline = new OfflineAudioContext(1,samples,16000);
+    const node = offline.createBufferSource(); node.buffer = buffer; node.connect(offline.destination);
+    node.start(0,start,end-start);
+    const rendered = await offline.startRendering(); job.check();
+    return rendered.getChannelData(0);
+  }
+  async function rvAudioSamples(job,start,end) {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC || !window.OfflineAudioContext) throw new Error('Se necesita Web Audio para transcribir.');
+    const ctx = new AC(); job.cleanups.push(() => ctx.close());
+    await ctx.resume();
+    if (ctx.state !== 'running') throw new Error('El navegador bloqueó el audio. Pulsa de nuevo el botón.');
+    rvMessage('Leyendo el audio del video…',null);
+    const url = video.currentSrc || video.src;
+    const response = await fetch(url,{signal:job.abort.signal});
+    if (!response.ok) throw new Error('No se pudo leer el video. Para URLs externas, habilita CORS o sube un archivo local.');
+    const bytes = await response.arrayBuffer(); job.check();
+    try {
+      const buffer = await ctx.decodeAudioData(bytes);
+      return await rvMono(buffer,start,Math.min(end,buffer.duration),job);
+    } catch(error) {
+      job.check();
+      // Some browsers cannot decode an MP4 container via decodeAudioData.
+      // Read PCM from a private playback in real time; do not use the microphone.
+      rvMessage('Leyendo audio en tiempo real; este navegador no decodifica directamente el contenedor…',0);
+      const player = await rvPlayer('video',job); await rvSeek(player,start,job);
+      const source = ctx.createMediaElementSource(player);
+      const processor = ctx.createScriptProcessor(4096,2,1);
+      const silence = ctx.createGain(); silence.gain.value = 0;
+      source.connect(processor); processor.connect(silence); silence.connect(ctx.destination);
+      job.cleanups.push(() => { processor.onaudioprocess=null; source.disconnect(); processor.disconnect(); silence.disconnect(); });
+      const parts = []; let count = 0;
+      const limit = Math.ceil((end-start)*ctx.sampleRate);
+      processor.onaudioprocess = ev => {
+        if (player.paused || job.cancelled || count >= limit) return;
+        const input = ev.inputBuffer, size = Math.min(input.length,limit-count), part = new Float32Array(size);
+        for (let c=0;c<input.numberOfChannels;c++) {
+          const data = input.getChannelData(c);
+          for (let i=0;i<size;i++) part[i] += data[i]/input.numberOfChannels;
+        }
+        parts.push(part); count += size;
+      };
+      await player.play();
+      await new Promise((resolve,reject) => {
+        let timer, timeout;
+        const clean = () => { clearInterval(timer); clearTimeout(timeout); job.abort.signal.removeEventListener('abort',abort); player.pause(); };
+        const abort = () => { clean(); reject(new Error('Proceso cancelado.')); };
+        job.abort.signal.addEventListener('abort',abort,{once:true});
+        timer = setInterval(() => {
+          rvMessage('Leyendo el audio en tiempo real…',(player.currentTime-start)/(end-start));
+          if (player.ended || player.currentTime >= end || count >= limit) { clean(); resolve(); }
+        },80);
+        timeout = setTimeout(() => { clean(); reject(new Error('La lectura del audio se detuvo.')); },(end-start+60)*1000);
+        if (job.cancelled) abort();
+      });
+      if (!count) throw new Error('No se encontró audio legible en el segmento.');
+      const pcm = ctx.createBuffer(1,count,ctx.sampleRate), dest = pcm.getChannelData(0); let offset = 0;
+      for (const part of parts) { dest.set(part,offset); offset += part.length; }
+      return await rvMono(pcm,0,pcm.duration,job);
+    }
+  }
+  $('rvAuto').addEventListener('click', async () => {
+    let job;
+    try {
+      if (!tracks.video.ready) throw new Error('Carga un video para transcribir su audio.');
+      if (rvCues.length && !confirm(window.RVI18N.t('¿Reemplazar los subtítulos temporizados actuales por una nueva transcripción?'))) return;
+      job = rvBegin('transcribe');
+      const [start,end] = bounds('video');
+      const samples = await rvAudioSamples(job,start,end);
+      let energy = 0; for (let i=0;i<samples.length;i++) energy += samples[i]*samples[i];
+      if (Math.sqrt(energy/samples.length)<.0001) throw new Error('El segmento no contiene audio audible; no se generaron subtítulos.');
+      if (!rvAsr) {
+        rvMessage('Descargando librerías y modelo de transcripción. La primera carga puede tardar…',null);
+        const {pipeline,env} = await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.5.2/dist/transformers.min.js');
+        env.allowLocalModels = false;
+        if (!self.crossOriginIsolated) env.backends.onnx.wasm.numThreads = 1;
+        job.check();
+        rvAsr = await pipeline('automatic-speech-recognition','onnx-community/whisper-tiny',{
+          device:'wasm', dtype:'q8', progress_callback: p => {
+            if (!job.cancelled && p.status === 'progress') rvMessage(`Descargando modelo: ${Math.round(p.progress || 0)}%`,null);
+          }
+        });
+      }
+      job.check(); rvMessage('Transcribiendo el audio localmente. No cierres esta pestaña…',null);
+      const result = await rvAsr(samples,{language:rvLang[$('speechLanguage').value] || 'spanish',
+        task:'transcribe', chunk_length_s:30, stride_length_s:5, return_timestamps:true});
+      job.check();
+      const duration = end-start;
+      const chunks = result.chunks || [];
+      const next = chunks.map((c,i) => ({
+        start:clamp(Number(c.timestamp?.[0]) || 0,0,duration),
+        end:clamp(c.timestamp?.[1] == null ? (chunks[i+1]?.timestamp?.[0] ?? duration) : Number(c.timestamp[1]),0,duration),
+        text:String(c.text || '').trim()
+      })).filter(c => c.text && c.end>c.start);
+      if (!next.length && String(result.text || '').trim()) next.push({start:0,end:duration,text:result.text.trim()});
+      if (!next.length) throw new Error('No se detectó voz. El texto anterior se conserva.');
+      rvCues = next; $('rvTimed').checked = true;
+      rvSyncTranscript(); rvRenderCues();
+      rvMessage('Transcripción lista. Revisa los textos y tiempos: el reconocimiento automático puede cometer errores.',1);
+    } catch(e) { rvMessage(job?.cancelled ? 'Transcripción cancelada. El texto anterior se conserva.' : window.RVI18N.error('transcription',e)); }
+    finally { if (job) await rvEnd(job); }
+  });
+
+  function rvMp4Type() {
+    if (!window.MediaRecorder) return null;
+    return ['video/mp4;codecs=avc1.42E01E,mp4a.40.2','video/mp4;codecs=avc1,mp4a.40.2',
+      'video/mp4;codecs=avc1','video/mp4'].find(t => MediaRecorder.isTypeSupported(t)) || null;
+  }
+  function rvWrapText(ctx,text,maxWidth) {
+    const lines = [];
+    for (const paragraph of text.replace(/\r/g,'').split('\n')) {
+      let line = '';
+      for (const char of paragraph) {
+        if (line && ctx.measureText(line+char).width > maxWidth) { lines.push(line); line = char; }
+        else line += char;
+      }
+      lines.push(line);
+    }
+    return lines;
+  }
+  function rvRoundRect(ctx,x,y,w,h,r) {
+    r = Math.min(r,w/2,h/2); ctx.beginPath();
+    ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);
+    ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();
+  }
+  function rvPaint(ctx,player,time,settings) {
+    const w = ctx.canvas.width, h = ctx.canvas.height;
+    ctx.clearRect(0,0,w,h); ctx.fillStyle='#000'; ctx.fillRect(0,0,w,h);
+    if (player.readyState >= 2 && player.videoWidth && player.videoHeight) {
+      const factor = settings.fit === 'contain' ? Math.min(w/player.videoWidth,h/player.videoHeight) : Math.max(w/player.videoWidth,h/player.videoHeight);
+      const dw = player.videoWidth*factor, dh = player.videoHeight*factor;
+      ctx.drawImage(player,(w-dw)/2,(h-dh)/2,dw,dh);
+    }
+    const text = rvCaptionAt(time,settings.cues,settings.timed,settings.start,settings.text);
+    if (!text) return;
+    const size = settings.size*w/350, lineHeight = size*1.2, padX = size*.55, padY = size*.3;
+    ctx.font = `${settings.weight} ${size}px ${settings.font}`;
+    const maxWidth = w*Math.min(88,2*Math.min(settings.x,100-settings.x))/100;
+    const lines = rvWrapText(ctx,text,Math.max(1,maxWidth-2*padX));
+    const boxW = Math.min(maxWidth,Math.max(...lines.map(l => ctx.measureText(l).width))+2*padX);
+    const boxH = lines.length*lineHeight+2*padY;
+    const cx = settings.x*w/100, cy = settings.y*h/100;
+    if (settings.background) {
+      ctx.fillStyle = 'rgba(0,0,0,.5)'; rvRoundRect(ctx,cx-boxW/2,cy-boxH/2,boxW,boxH,size*.4); ctx.fill();
+    }
+    ctx.fillStyle = settings.color; ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.shadowColor='rgba(0,0,0,.8)';ctx.shadowBlur=8*w/350;ctx.shadowOffsetY=2*w/350;
+    lines.forEach((line,i) => ctx.fillText(line,cx,cy-boxH/2+padY+lineHeight*(i+.5)));
+    ctx.shadowColor='transparent';ctx.shadowBlur=0;ctx.shadowOffsetY=0;
+  }
+  $('rvDownload').addEventListener('click', async () => {
+    let job;
+    try {
+      if (!tracks.video.ready) throw new Error('Carga un video antes de descargarlo.');
+      const mimeType = rvMp4Type();
+      if (!mimeType) throw new Error('Este navegador no permite grabar MP4. Usa una versión reciente de Chrome, Edge o Safari que admita MediaRecorder MP4. No se generará un WebM con extensión falsa.');
+      if (!HTMLCanvasElement.prototype.captureStream) throw new Error('El navegador no permite capturar el lienzo del video.');
+      if (document.hidden) throw new Error('Mantén esta pestaña visible durante la exportación.');
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) throw new Error('Se necesita Web Audio para mezclar las pistas.');
+      job = rvBegin('export');
+      const [start,end] = bounds('video'), [aStart,aEnd] = bounds('audio');
+      if (!(end>start)) throw new Error('El recorte debe tener una duración mayor que cero.');
+      const settings = {start,fit:$('fit').value,text:$('transcript').value,
+        cues:rvCues.map(c => ({...c})),timed:$('rvTimed').checked,
+        font:$('font').value,weight:$('fontWeight').value,size:Number($('fontSize').value),
+        color:$('textColor').value,x:Number($('captionX').value),y:Number($('captionY').value),
+        background:$('captionBackground').checked};
+      const ctx = new AC(); job.cleanups.push(() => ctx.close());
+      await ctx.resume();
+      if (ctx.state !== 'running') throw new Error('El navegador bloqueó el audio de la exportación.');
+      const destination = ctx.createMediaStreamDestination();
+      job.cleanups.push(() => destination.stream.getTracks().forEach(t => t.stop()));
+      const player = await rvPlayer('video',job); await rvSeek(player,start,job);
+      if (player.readyState<2) await rvWaitMedia(player,'loadeddata',()=>{},job);
+      const source = ctx.createMediaElementSource(player), gain = ctx.createGain();
+      gain.gain.value = Number($('videoVolume').value); source.connect(gain);gain.connect(destination);
+      job.cleanups.push(() => { source.disconnect();gain.disconnect(); });
+      let music = null, musicGain = null;
+      if (tracks.audio.ready && Number($('audioVolume').value)>0 && aEnd>aStart) {
+        music = await rvPlayer('audio',job); await rvSeek(music,aStart,job);
+        const musicSource = ctx.createMediaElementSource(music); musicGain = ctx.createGain();
+        musicGain.gain.value = Number($('audioVolume').value);musicSource.connect(musicGain);musicGain.connect(destination);
+        job.cleanups.push(() => { musicSource.disconnect(); musicGain.disconnect(); });
+      }
+      const canvas = document.createElement('canvas'); canvas.width=720; canvas.height=1280;
+      const paint = canvas.getContext('2d',{alpha:false});
+      rvPaint(paint,player,start,settings);
+      const stream = canvas.captureStream(30);
+      for (const track of destination.stream.getAudioTracks()) stream.addTrack(track);
+      job.cleanups.push(() => stream.getTracks().forEach(t => t.stop()));
+      const recorder = new MediaRecorder(stream,{mimeType,videoBitsPerSecond:5000000,audioBitsPerSecond:192000});
+      const chunks = []; let raf = 0, timer = null, timeout = null, finished = false;
+      job.cleanups.push(() => { cancelAnimationFrame(raf); clearInterval(timer);clearTimeout(timeout);
+        if (recorder.state !== 'inactive') recorder.stop(); });
+      recorder.ondataavailable = event => { if (event.data.size) chunks.push(event.data); };
+      // Attach the rejection handler immediately, including when play() fails.
+      const recorded = new Promise((resolve,reject) => {
+        recorder.onstop = resolve;
+        recorder.onerror = () => reject(new Error('El navegador no pudo codificar el MP4.'));
+      });
+      recorded.catch(()=>{});
+      const finish = () => {
+        if (finished) return; finished = true;
+        player.pause();if (music) music.pause();
+        cancelAnimationFrame(raf);clearInterval(timer);clearTimeout(timeout);
+        if (recorder.state !== 'inactive') recorder.stop();
+      };
+      job.abort.signal.addEventListener('abort',finish,{once:true});
+      job.cleanups.push(() => job.abort.signal.removeEventListener('abort',finish));
+      player.addEventListener('ended',finish,{once:true});
+      let playbackError = null;
+      player.addEventListener('error',() => { playbackError = new Error('La reproducción del video falló durante la exportación.');finish(); },{once:true});
+      const draw = () => {
+        if (finished) return;
+        try { rvPaint(paint,player,player.currentTime,settings); }
+        catch (error) { playbackError = error; finish(); return; }
+        raf = requestAnimationFrame(draw);
+      };
+      // Playback is primed before starting recording to avoid a blank lead-in.
+      const plays = [player.play()]; if (music) plays.push(music.play());
+      await Promise.all(plays);job.check();
+      if (finished || player.ended || player.currentTime >= end) throw new Error("The segment ended before recording could start. Select a longer segment.");
+      recorder.start(250);draw();
+      if (job.cancelled) finish();
+      rvMessage('Exportando MP4 en tiempo real. Mantén esta pestaña visible…',0);
+      timer = setInterval(() => {
+        if (finished) return;
+        const elapsed = player.currentTime-start;
+        if (music && !music.paused) {
+          const target = aStart+elapsed;
+          if (target >= aEnd) { musicGain.gain.value=0;music.pause(); }
+          else if (Math.abs(music.currentTime-target)>.2) music.currentTime=target;
+        }
+        rvMessage(`Exportando MP4: ${formatTime(elapsed)} / ${formatTime(end-start)}`,
+          elapsed/(end-start));
+        if (player.currentTime>=end || player.ended) finish();
+      },20);
+      timeout = setTimeout(() => { playbackError = new Error('La exportación se detuvo o tardó demasiado.');finish(); },(end-start+90)*1000);
+      await recorded;job.check();
+      if (playbackError) throw playbackError;
+      if (!chunks.length || !recorder.mimeType.toLowerCase().startsWith('video/mp4'))
+        throw new Error('El navegador no produjo un MP4 válido.');
+      const result = new Blob(chunks,{type:recorder.mimeType});
+      // ISO BMFF must have an ftyp box near the beginning, not a WebM header.
+      const header = new Uint8Array(await result.slice(0,64).arrayBuffer());
+      if (!new TextDecoder('latin1').decode(header).includes('ftyp'))
+        throw new Error('La salida no tiene encabezado MP4; no se descargó con una extensión incorrecta.');
+      rvSave(result,'ReelVibe-video-terminado.mp4');
+      rvMessage('MP4 terminado: descarga solicitada, con recorte, audio y subtítulos.',1);
+    } catch(e) { rvMessage(job?.cancelled ? 'Exportación cancelada. No se descargó un video incompleto.' : window.RVI18N.error('export',e)); }
+    finally { if (job) await rvEnd(job); }
+  });
+  window.addEventListener('beforeunload',() => {
+    cancelAnimationFrame(rvCaptionFrame);
+    if (rvJob) { rvJob.cancelled=true;rvJob.abort.abort(); }
+  });
+
+  window.addEventListener("beforeunload", () => {
+    if (extractionJob) extractionJob.cancel();
+    if (recognition) recognition.abort();
+    for (const track of Object.values(tracks)) {
+      if (track.objectUrl) URL.revokeObjectURL(track.objectUrl);
+    }
+  });
+})();
+</script>
+
+<script id="rvThemeControls">
+(() => {
+  'use strict';
+  const root = document.documentElement;
+  const button = document.getElementById('rvThemeToggle');
+  const language = document.getElementById('rvUiLanguage');
+  if (!button) return;
+
+  function updateButton() {
+    const isLight = root.getAttribute('data-rv-theme') === 'light';
+    const isSpanish = root.lang === 'es';
+    const text = isSpanish
+      ? (isLight ? 'Modo oscuro' : 'Modo claro')
+      : (isLight ? 'Dark mode' : 'Light mode');
+    button.textContent = text;
+    button.setAttribute('aria-pressed', String(isLight));
+    button.title = isSpanish ? 'Cambiar a ' + text.toLowerCase() : 'Switch to ' + text.toLowerCase();
+  }
+
+  button.addEventListener('click', () => {
+    const next = root.getAttribute('data-rv-theme') === 'light' ? 'dark' : 'light';
+    root.setAttribute('data-rv-theme', next);
+    try { localStorage.setItem('rv-interface-theme', next); } catch (_) {}
+    updateButton();
+  });
+  if (language) language.addEventListener('change', updateButton);
+  updateButton();
+})();
+</script>
+</body>
+</html>
